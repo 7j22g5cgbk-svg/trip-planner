@@ -505,6 +505,31 @@
     show("error");
   }
 
+  /* Scan for the first balanced {...} object. Brace-counting, not a greedy
+     regex: braces inside string literals are skipped, so prose before or
+     after the object cannot throw the match off. Returns "" if none. */
+  function extractJsonObject(s) {
+    var start = s.indexOf("{");
+    if (start === -1) return "";
+    var depth = 0, inStr = false, escaped = false;
+    for (var i = start; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (inStr) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) return s.slice(start, i + 1);
+      }
+    }
+    return "";
+  }
+
   /* ---------- prompt ---------- */
   function buildPrompt(dest) {
     return "You are my personal travel researcher. Research " + dest +
@@ -530,7 +555,7 @@
     var body = {
       model: "claude-sonnet-5",
       max_tokens: 8000,
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 20 }],
       messages: [{ role: "user", content: buildPrompt(dest) }]
     };
 
@@ -586,14 +611,13 @@
         return;
       }
 
-      /* Strip code fences, then keep the outermost { ... } block. */
-      var cleaned = raw.replace(/^\s*```[a-zA-Z]*\s*/, "").replace(/\s*```\s*$/, "").trim();
-      var first = cleaned.indexOf("{");
-      var last = cleaned.lastIndexOf("}");
-      if (first !== -1 && last > first) cleaned = cleaned.slice(first, last + 1);
+      /* The model sometimes writes prose before the JSON. Drop any fence
+         markers, then take the first balanced { ... } block. */
+      var candidate = extractJsonObject(raw.replace(/```[a-zA-Z]*/g, " "));
+      if (!candidate) candidate = extractJsonObject(raw);
 
       var trip = null;
-      try { trip = JSON.parse(cleaned); } catch (e) { trip = null; }
+      try { trip = JSON.parse(candidate); } catch (e) { trip = null; }
 
       if (!trip || typeof trip !== "object" || Array.isArray(trip)) {
         fail("Could not read the trip data",
