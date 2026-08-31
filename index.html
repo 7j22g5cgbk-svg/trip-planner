@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Travel — Claude</title>
+<style>
+  :root{
+    --paper:#FAF7F2;
+    --surface:#FFFFFF;
+    --ink:#1F1B17;
+    --muted:#6B6259;
+    --line:#ECE5DA;
+    --accent:#B0553C;
+    --accent-tint:rgba(176,85,60,.09);
+    --accent-line:rgba(176,85,60,.42);
+    --shadow:0 1px 2px rgba(31,27,23,.04), 0 8px 24px rgba(31,27,23,.05);
+    --shadow-lift:0 2px 6px rgba(31,27,23,.06), 0 18px 42px rgba(31,27,23,.10);
+    --serif:"Iowan Old Style","Palatino","Hoefler Text",Georgia,serif;
+    --sans:"Avenir Next","Helvetica Neue",-apple-system,BlinkMacSystemFont,sans-serif;
+    --radius:14px;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:880px;margin:0 auto;
+    padding:0 20px calc(72px + env(safe-area-inset-bottom));
+  }
+  [hidden]{display:none !important}
+
+  /* ---------- hero ---------- */
+  .masthead{padding:calc(44px + env(safe-area-inset-top)) 0 26px}
+  .eyebrow{
+    font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin:0 0 16px;
+  }
+  .destination{
+    font-family:var(--serif);
+    font-size:clamp(2.1rem,8vw,4rem);
+    line-height:1.06;font-weight:400;letter-spacing:-.015em;
+    margin:0 0 16px;
+  }
+  .summary{
+    font-family:var(--serif);font-style:italic;
+    font-size:clamp(1.02rem,4vw,1.28rem);
+    line-height:1.55;color:var(--muted);
+    max-width:60ch;margin:0;
+  }
+
+  /* ---------- form ---------- */
+  .field{display:block;margin:0 0 14px}
+  .label{
+    display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 8px;
+  }
+  input[type=text],input[type=password]{
+    width:100%;font-family:var(--sans);
+    font-size:16px; /* 16px keeps iOS Safari from zooming on focus */
+    color:var(--ink);background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;min-height:50px;
+    box-shadow:var(--shadow);
+    -webkit-appearance:none;appearance:none;
+  }
+  input:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent-line)}
+  .btn-solid{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:100%;font-family:var(--sans);font-size:15px;font-weight:600;
+    letter-spacing:.02em;cursor:pointer;
+    background:var(--accent);color:#fff;
+    border:1px solid var(--accent);border-radius:999px;
+    min-height:52px;padding:14px 24px;
+    -webkit-appearance:none;appearance:none;
+  }
+  .btn-solid:disabled{opacity:.45;cursor:default}
+  .linkish{
+    display:inline-block;background:none;border:0;padding:0;margin:18px 0 0;
+    font-family:var(--sans);font-size:13px;color:var(--muted);
+    text-decoration:underline;cursor:pointer;
+  }
+  .linkish:hover{color:var(--accent)}
+  .hint{font-size:13px;color:var(--muted);margin:10px 0 0;max-width:56ch}
+
+  /* ---------- states ---------- */
+  .state{padding:52px 0 0}
+  .spinner{
+    width:26px;height:26px;border-radius:50%;
+    border:2px solid var(--line);border-top-color:var(--accent);
+    animation:spin .9s linear infinite;margin:0 0 18px;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spinner{animation-duration:2.4s}}
+  .state-title{font-family:var(--serif);font-size:1.35rem;font-weight:400;margin:0 0 8px}
+  .state-note{color:var(--muted);font-size:.94rem;margin:0}
+  .err{
+    background:var(--surface);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);
+  }
+  .err-title{font-family:var(--serif);font-size:1.25rem;font-weight:400;margin:0 0 8px}
+  .err-msg{color:var(--muted);font-size:.94rem;margin:0 0 4px}
+  details{margin:16px 0 0}
+  summary{
+    cursor:pointer;font-size:12px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);
+  }
+  pre.raw{
+    white-space:pre-wrap;word-break:break-word;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--muted);
+    background:var(--paper);border:1px solid var(--line);
+    border-radius:10px;padding:14px;margin:12px 0 0;
+    max-height:340px;overflow:auto;
+  }
+
+  /* ---------- sections ---------- */
+  section{padding:48px 0 0}
+  .sec-head{
+    display:flex;align-items:baseline;gap:14px;
+    padding-bottom:12px;margin:0 0 26px;
+    border-bottom:1px solid var(--line);
+  }
+  .sec-title{
+    font-family:var(--serif);font-size:1.6rem;font-weight:400;
+    letter-spacing:-.01em;margin:0;
+  }
+  .sec-count{
+    margin-left:auto;font-size:11.5px;color:var(--muted);
+    letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
+  }
+
+  /* ---------- cards ---------- */
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+  .card,.stop{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  .card{padding:22px 22px 18px;display:flex;flex-direction:column}
+  .card-name{
+    font-family:var(--serif);font-size:1.18rem;font-weight:400;
+    line-height:1.3;margin:0 0 6px;
+  }
+  .card-meta{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 12px;
+  }
+  .card-note{font-size:.94rem;color:var(--muted);margin:0 0 18px;flex:1}
+  .price{
+    display:inline-block;font-size:12px;color:var(--muted);
+    background:#F5F0E8;border-radius:999px;
+    padding:4px 12px;margin:0 0 14px;letter-spacing:.02em;
+  }
+  .tag{
+    display:inline-block;font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);
+    background:var(--accent-tint);
+    border:1px solid rgba(176,85,60,.24);border-radius:999px;
+    padding:4px 10px;margin:0 0 12px;white-space:nowrap;
+  }
+
+  /* ---------- buttons ---------- */
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:var(--sans);font-size:12.5px;font-weight:500;
+    letter-spacing:.02em;text-decoration:none;
+    border-radius:999px;min-height:38px;padding:8px 17px;
+    border:1px solid var(--accent-line);
+    color:var(--accent);background:transparent;
+  }
+  .btn--sm{min-height:34px;padding:6px 14px;font-size:12px}
+  a:focus-visible,.tab:focus-visible{
+    outline:2px solid var(--accent);outline-offset:3px;border-radius:999px;
+  }
+
+  /* ---------- itinerary tabs ---------- */
+  .tabs{
+    display:flex;gap:8px;margin:0 0 26px;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:4px;scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    flex:0 0 auto;
+    appearance:none;-webkit-appearance:none;cursor:pointer;
+    font-family:var(--sans);font-size:.88rem;font-weight:500;
+    color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:999px;
+    min-height:44px;padding:10px 20px;white-space:nowrap;
+  }
+  .tab[aria-selected="true"]{
+    background:var(--accent);border-color:var(--accent);
+    color:#fff;font-weight:600;
+  }
+  .panel[hidden]{display:none}
+
+  .day{padding:0 0 30px}
+  .day + .day{border-top:1px solid var(--line);padding-top:28px}
+  .day-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 18px}
+  .day-title{font-family:var(--serif);font-size:1.28rem;font-weight:400;margin:0}
+  .stops{list-style:none;margin:0;padding:0 0 0 20px;border-left:1px solid var(--line)}
+  .stop{position:relative;margin:0 0 14px;padding:16px 17px}
+  .stop:last-child{margin-bottom:0}
+  .stop::before{
+    content:"";position:absolute;left:-24px;top:22px;
+    width:7px;height:7px;border-radius:50%;
+    background:var(--paper);border:1.5px solid var(--accent);
+  }
+  .stop-time{
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 4px;
+  }
+  .stop-name{font-family:var(--serif);font-size:1.06rem;margin:0 0 4px}
+  .stop-note{font-size:.92rem;color:var(--muted);margin:0 0 12px}
+  .stop .actions{margin-top:0}
+
+  .empty{color:var(--muted);font-style:italic;font-family:var(--serif)}
+  footer{
+    padding:44px 0 0;margin-top:36px;
+    border-top:1px solid var(--line);
+    color:var(--muted);font-size:12.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ setup: no key stored ============ -->
+  <div id="setup" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">Set up</h1>
+      <p class="summary">Paste your Anthropic API key once. It is stored only in this browser and sent only to api.anthropic.com.</p>
+    </header>
+    <form id="setup-form">
+      <label class="field">
+        <span class="label">Anthropic API key</span>
+        <input type="password" id="key-input" placeholder="sk-ant-…"
+               autocomplete="off" autocapitalize="off" autocorrect="off"
+               spellcheck="false" enterkeyhint="done">
+      </label>
+      <button class="btn-solid" type="submit">Save key</button>
+      <p class="hint">Stored with <code>localStorage</code> under <code>anthropic_key</code>. Clearing Safari's website data removes it. Anyone with access to this device's browser can use it, so use a key you are willing to rotate.</p>
+      <p id="setup-err" class="hint" style="color:var(--accent)" hidden></p>
+    </form>
+  </div>
+
+  <!-- ============ main: ask for a destination ============ -->
+  <div id="main" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">Where to?</h1>
+      <p class="summary">Boutique hotels, real places, no tourist traps. Researched live with web search.</p>
+    </header>
+    <form id="trip-form">
+      <label class="field">
+        <span class="label">Destination</span>
+        <input type="text" id="dest-input" placeholder="Lisbon, 3 days"
+               autocapitalize="words" autocorrect="off" enterkeyhint="go">
+      </label>
+      <button class="btn-solid" type="submit" id="go">Plan trip</button>
+    </form>
+    <button class="linkish" type="button" id="change-key">Change or clear API key</button>
+  </div>
+
+  <!-- ============ loading ============ -->
+  <div id="loading" class="state" hidden>
+    <div class="spinner" role="status" aria-live="polite"></div>
+    <p class="state-title">Researching…</p>
+    <p class="state-note">This takes a minute or two. Keep this tab in the foreground — iOS may pause background tabs.</p>
+  </div>
+
+  <!-- ============ error ============ -->
+  <div id="error" class="state" hidden>
+    <div class="err">
+      <p class="err-title" id="err-title">Something went wrong</p>
+      <p class="err-msg" id="err-msg"></p>
+      <details id="err-raw-wrap" hidden>
+        <summary>Show raw response</summary>
+        <pre class="raw" id="err-raw"></pre>
+      </details>
+    </div>
+    <button class="linkish" type="button" id="err-back">Back</button>
+  </div>
+
+  <!-- ============ result ============ -->
+  <div id="result" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination" id="r-dest"></h1>
+      <p class="summary" id="r-summary"></p>
+    </header>
+    <main id="r-content"></main>
+    <footer id="r-footer"></footer>
+    <button class="linkish" type="button" id="again">Plan another trip</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* The only endpoint this page ever talks to. */
+  var API_URL = "https://api.anthropic.com/v1/messages";
+  var STORE_KEY = "anthropic_key";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var views = ["setup", "main", "loading", "error", "result"];
+  function show(name) {
+    views.forEach(function (v) { $(v).hidden = (v !== name); });
+    window.scrollTo(0, 0);
+  }
+
+  /* ---------- key storage (localStorage only) ---------- */
+  function getKey() {
+    try { return localStorage.getItem(STORE_KEY) || ""; } catch (e) { return ""; }
+  }
+  function setKey(v) {
+    try { localStorage.setItem(STORE_KEY, v); return true; } catch (e) { return false; }
+  }
+  function clearKey() {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  }
+
+  /* ---------- helpers (same rules as the desktop template) ---------- */
+  function esc(v) {
+    if (v === null || v === undefined) return "";
+    return String(v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function txt(v) { return v === null || v === undefined ? "" : String(v).trim(); }
+  function arr(v) {
+    if (!Array.isArray(v)) return [];
+    return v.filter(function (x) { return x && typeof x === "object"; });
+  }
+  /* Only http(s), so a bad value can never become javascript: */
+  function url(v) {
+    var s = txt(v);
+    return /^https?:\/\//i.test(s) ? esc(s) : "";
+  }
+  function plus(s) {
+    return encodeURIComponent(txt(s).replace(/\s+/g, " ")).replace(/%20/g, "+");
+  }
+
+  var destQ = "";
+  function query(name) { return plus(destQ ? name + " " + destQ : name); }
+
+  /* Always yields a map link: the researched URL if valid, else one we build. */
+  function mapsFor(item) {
+    var direct = url(item.maps);
+    if (direct) return direct;
+    var n = txt(item.name);
+    if (!n) return "";
+    return esc("https://www.google.com/maps/search/?api=1&query=" + query(n));
+  }
+  function routeFor(day) {
+    var direct = url(day.route_maps);
+    if (direct) return direct;
+    var names = arr(day.stops).map(function (s) { return txt(s.name); })
+                              .filter(function (n) { return n; });
+    if (!names.length) return "";
+    var u = "https://www.google.com/maps/dir/?api=1&destination=" + query(names[names.length - 1]);
+    if (names.length > 1) {
+      u += "&waypoints=" + names.slice(0, -1).map(query).join("|");
+    }
+    return esc(u);
+  }
+  /* href is already escaped by url()/mapsFor()/routeFor(). */
+  function link(href, label, small) {
+    if (!href) return "";
+    return '<a class="btn' + (small ? " btn--sm" : "") + '" href="' + href +
+           '" target="_blank" rel="noopener noreferrer">' + esc(label) + "</a>";
+  }
+  function actions(item, small) {
+    return link(url(item.website), "Website", small) +
+           link(mapsFor(item), small ? "Map" : "Google Maps", small);
+  }
+  function section(id, title, count, body) {
+    return '<section id="' + id + '"><div class="sec-head">' +
+             '<h2 class="sec-title">' + esc(title) + "</h2>" +
+             '<span class="sec-count">' + esc(count) + "</span>" +
+           "</div>" + body + "</section>";
+  }
+
+  /* ---------- rendering ---------- */
+  function render(trip) {
+    destQ = txt(trip.destination);
+    var html = "";
+
+    var hotels = arr(trip.hotels);
+    if (hotels.length) {
+      html += section("hotels", "Hotels",
+        hotels.length + (hotels.length === 1 ? " stay" : " stays"),
+        '<div class="grid">' + hotels.map(function (h) {
+          return '<article class="card"><h3 class="card-name">' + esc(h.name) + "</h3>" +
+            (txt(h.price) ? '<p class="price">' + esc(h.price) + "</p>" : "") +
+            '<p class="card-note">' + esc(h.why) + "</p>" +
+            '<div class="actions">' + actions(h) + "</div></article>";
+        }).join("") + "</div>");
+    }
+
+    var itins = arr(trip.itineraries).filter(function (i) { return arr(i.days).length; });
+    if (itins.length) {
+      var tabs = "", panels = "";
+      itins.forEach(function (it, idx) {
+        var name = txt(it.name) || "Itinerary " + (idx + 1);
+        tabs += '<button class="tab" type="button" role="tab" data-idx="' + idx +
+                '" aria-selected="' + (idx === 0) + '">' + esc(name) + "</button>";
+        var days = arr(it.days).map(function (d) {
+          var stops = arr(d.stops).map(function (s) {
+            var acts = actions(s, true);
+            return '<li class="stop">' +
+              (txt(s.time) ? '<p class="stop-time">' + esc(s.time) + "</p>" : "") +
+              '<p class="stop-name">' + esc(s.name) + "</p>" +
+              (txt(s.note) ? '<p class="stop-note">' + esc(s.note) + "</p>" : "") +
+              (acts ? '<div class="actions">' + acts + "</div>" : "") + "</li>";
+          }).join("");
+          return '<div class="day"><div class="day-head">' +
+            '<h3 class="day-title">Day ' + esc(d.day) + "</h3>" +
+            link(routeFor(d), "Open route in Google Maps", true) + "</div>" +
+            (stops ? '<ul class="stops">' + stops + "</ul>"
+                   : '<p class="empty">No stops listed.</p>') + "</div>";
+        }).join("");
+        panels += '<div class="panel" role="tabpanel" data-idx="' + idx + '"' +
+                  (idx === 0 ? "" : " hidden") + ">" + days + "</div>";
+      });
+      html += section("itineraries", "Itineraries",
+        itins.length + (itins.length === 1 ? " plan" : " plans"),
+        '<div class="tabs" role="tablist">' + tabs + "</div>" + panels);
+    }
+
+    var rests = arr(trip.restaurants);
+    if (rests.length) {
+      html += section("restaurants", "Restaurants", rests.length + " places",
+        '<div class="grid">' + rests.map(function (r) {
+          return '<article class="card">' +
+            (r.saved === true ? '<div><span class="tag">★ my saved place</span></div>' : "") +
+            '<h3 class="card-name">' + esc(r.name) + "</h3>" +
+            (txt(r.cuisine) ? '<p class="card-meta">' + esc(r.cuisine) + "</p>" : "") +
+            '<p class="card-note">' + esc(r.note) + "</p>" +
+            '<div class="actions">' + actions(r) + "</div></article>";
+        }).join("") + "</div>");
+    }
+
+    var sights = arr(trip.sights);
+    if (sights.length) {
+      html += section("sights", "Sights", sights.length + " to see",
+        '<div class="grid">' + sights.map(function (s) {
+          return '<article class="card"><h3 class="card-name">' + esc(s.name) + "</h3>" +
+            '<p class="card-note">' + esc(s.note) + "</p>" +
+            '<div class="actions">' + actions(s) + "</div></article>";
+        }).join("") + "</div>");
+    }
+
+    $("r-dest").textContent = txt(trip.destination) || "Your trip";
+    $("r-summary").textContent = txt(trip.summary);
+    $("r-content").innerHTML = html ||
+      '<section><p class="empty">Nothing came back for this trip.</p></section>';
+    $("r-footer").textContent =
+      "Researched " + new Date().toLocaleDateString() +
+      " · verify hours and availability before you go.";
+
+    /* tab switching */
+    var root = $("r-content");
+    Array.prototype.forEach.call(root.querySelectorAll(".tab"), function (t) {
+      t.addEventListener("click", function () {
+        var idx = t.getAttribute("data-idx");
+        Array.prototype.forEach.call(root.querySelectorAll(".tab"), function (o) {
+          o.setAttribute("aria-selected", o.getAttribute("data-idx") === idx ? "true" : "false");
+        });
+        Array.prototype.forEach.call(root.querySelectorAll(".panel"), function (p) {
+          p.hidden = p.getAttribute("data-idx") !== idx;
+        });
+      });
+    });
+
+    show("result");
+  }
+
+  /* ---------- errors ---------- */
+  function fail(title, msg, raw) {
+    $("err-title").textContent = title;
+    $("err-msg").textContent = msg || "";
+    if (raw) {
+      $("err-raw").textContent = raw;
+      $("err-raw-wrap").hidden = false;
+    } else {
+      $("err-raw-wrap").hidden = true;
+    }
+    show("error");
+  }
+
+  /* ---------- prompt ---------- */
+  function buildPrompt(dest) {
+    return "You are my personal travel researcher. Research " + dest +
+      " using web search and build a travel brief. My taste: boutique, design-led hotels, " +
+      "adults-only where possible, air conditioning and a pool preferred, fine dining and " +
+      "curated non-touristy spots. Return ONLY a JSON object (no prose, no code fences) with " +
+      "this shape: { destination, summary, hotels:[{name,why,price,website,maps}], " +
+      "itineraries:[{name,days:[{day,stops:[{time,name,note,maps,website}],route_maps}]}] " +
+      "(produce 3-4 genuinely different itineraries), " +
+      "restaurants:[{name,cuisine,note,website,maps,saved}], sights:[{name,note,maps,website}] }. " +
+      "Sights and stops must be REAL named places, never activities/meals. For " +
+      "hotels/restaurants/sights/stops, use web search to find the official website and put the " +
+      "verified URL in website, else empty string. Set saved=false everywhere. Flag anything " +
+      "unverifiable in note. Never invent places or links.";
+  }
+
+  /* ---------- API call ---------- */
+  function planTrip(dest) {
+    var key = getKey();
+    if (!key) { show("setup"); return; }
+    show("loading");
+
+    var body = {
+      model: "claude-sonnet-5",
+      max_tokens: 8000,
+      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
+      messages: [{ role: "user", content: buildPrompt(dest) }]
+    };
+
+    fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.text().then(function (text) {
+        return { ok: res.ok, status: res.status, text: text };
+      });
+    }).then(function (r) {
+      var data = null;
+      try { data = JSON.parse(r.text); } catch (e) { data = null; }
+
+      if (!r.ok) {
+        var apiMsg = (data && data.error && data.error.message) || r.text || "";
+        if (r.status === 401 || r.status === 403) {
+          fail("Check your API key",
+               "The API rejected the key (HTTP " + r.status + "). " +
+               "Use “Change or clear API key” to enter a different one.", apiMsg);
+        } else if (r.status === 429) {
+          fail("Rate limited", apiMsg || "Too many requests. Wait a moment and try again.", r.text);
+        } else if (r.status === 400 && /credit|balance|quota/i.test(apiMsg)) {
+          fail("Credit problem", apiMsg, r.text);
+        } else {
+          fail("The API returned an error (HTTP " + r.status + ")", apiMsg, r.text);
+        }
+        return;
+      }
+
+      if (!data) { fail("Unreadable response", "The API reply was not valid JSON.", r.text); return; }
+
+      /* Concatenate every text block; ignore web_search tool blocks. */
+      var parts = [];
+      if (Array.isArray(data.content)) {
+        data.content.forEach(function (b) {
+          if (b && b.type === "text" && typeof b.text === "string") parts.push(b.text);
+        });
+      }
+      var raw = parts.join("\n").trim();
+
+      if (!raw) {
+        fail("Empty answer",
+             "The model returned no text" +
+             (data.stop_reason ? " (stop_reason: " + data.stop_reason + ")." : "."),
+             r.text);
+        return;
+      }
+
+      /* Strip code fences, then keep the outermost { ... } block. */
+      var cleaned = raw.replace(/^\s*```[a-zA-Z]*\s*/, "").replace(/\s*```\s*$/, "").trim();
+      var first = cleaned.indexOf("{");
+      var last = cleaned.lastIndexOf("}");
+      if (first !== -1 && last > first) cleaned = cleaned.slice(first, last + 1);
+
+      var trip = null;
+      try { trip = JSON.parse(cleaned); } catch (e) { trip = null; }
+
+      if (!trip || typeof trip !== "object" || Array.isArray(trip)) {
+        fail("Could not read the trip data",
+             "The model replied, but not with the JSON this page expects.", raw);
+        return;
+      }
+      render(trip);
+    }).catch(function (e) {
+      fail("No connection",
+           "The request could not be sent. Check your internet connection and try again.",
+           String(e && e.message ? e.message : e));
+    });
+  }
+
+  /* ---------- wiring ---------- */
+  $("setup-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("key-input").value.trim();
+    var errEl = $("setup-err");
+    if (!v) {
+      errEl.textContent = "Paste a key first.";
+      errEl.hidden = false;
+      return;
+    }
+    if (!setKey(v)) {
+      errEl.textContent = "This browser refused to store the key (private mode?).";
+      errEl.hidden = false;
+      return;
+    }
+    errEl.hidden = true;
+    $("key-input").value = "";
+    show("main");
+  });
+
+  $("trip-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var dest = $("dest-input").value.trim();
+    if (!dest) return;
+    $("dest-input").blur();
+    planTrip(dest);
+  });
+
+  $("change-key").addEventListener("click", function () {
+    clearKey();
+    $("key-input").value = "";
+    $("setup-err").hidden = true;
+    show("setup");
+  });
+
+  $("err-back").addEventListener("click", function () { show("main"); });
+  $("again").addEventListener("click", function () { show("main"); });
+
+  show(getKey() ? "main" : "setup");
+})();
+</script>
+</body>
+</html>
