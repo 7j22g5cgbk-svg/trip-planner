@@ -542,9 +542,11 @@
       "restaurants:[{name,cuisine,note,website,maps,saved}], sights:[{name,note,maps,website}] }. " +
       "Sights and stops must be REAL named places, never activities/meals. For " +
       "hotels/restaurants/sights/stops, use web search to find the official website and put the " +
-      "verified URL in website, else empty string. Set saved=false everywhere. Flag anything " +
-      "unverifiable in note. Never invent places or links. Keep it tight: the summary is at " +
-      "most 25 words, and every note field is under 15 words.";
+      "verified URL in website, else empty string. Set saved=false everywhere. " +
+      "Never invent places or links. HARD LIMITS: Output ONLY the JSON, nothing else. " +
+      "EXACTLY 3 itineraries. summary: max 20 words. Every 'why', 'note', and 'cuisine' " +
+      "field: max 12 words. Do NOT repeat disclaimer text in notes - if something is " +
+      "unverified, write only 'unverified'. Keep the whole response as compact as possible.";
   }
 
   /* ---------- API call ---------- */
@@ -555,8 +557,8 @@
 
     var body = {
       model: "claude-sonnet-5",
-      max_tokens: 16000,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
+      max_tokens: 24000,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6 }],
       messages: [{ role: "user", content: buildPrompt(dest) }]
     };
 
@@ -604,7 +606,15 @@
       }
       var raw = parts.join("\n").trim();
 
+      /* stop_reason "max_tokens" means the answer was cut off mid-JSON. */
+      var truncated = (data.stop_reason === "max_tokens");
+      function tooLong(rawText) {
+        fail("Ran out of room",
+             "The trip was too long to finish - tap Plan again.", rawText);
+      }
+
       if (!raw) {
+        if (truncated) { tooLong(r.text); return; }
         fail("Empty answer",
              "The model returned no text" +
              (data.stop_reason ? " (stop_reason: " + data.stop_reason + ")." : "."),
@@ -621,6 +631,7 @@
       try { trip = JSON.parse(candidate); } catch (e) { trip = null; }
 
       if (!trip || typeof trip !== "object" || Array.isArray(trip)) {
+        if (truncated) { tooLong(raw); return; }
         fail("Could not read the trip data",
              "The model replied, but not with the JSON this page expects.", raw);
         return;
