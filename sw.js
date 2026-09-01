@@ -1,6 +1,6 @@
 /* Travel — minimal app-shell service worker.
    All paths are relative so this works from a GitHub Pages subpath. */
-var CACHE = "travel-v1";
+var CACHE = "travel-v2";
 var SHELL = [
   "./",
   "./index.html",

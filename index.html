@@ -177,6 +177,34 @@
     padding:4px 10px;margin:0 0 12px;white-space:nowrap;
   }
 
+  /* ---------- library ---------- */
+  textarea{
+    width:100%;font-family:var(--sans);
+    font-size:16px;line-height:1.5;color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 16px;min-height:76px;resize:vertical;
+    box-shadow:var(--shadow);
+    -webkit-appearance:none;appearance:none;
+  }
+  textarea:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent-line)}
+  textarea[readonly]{background:var(--paper);color:var(--muted)}
+  .lib-form{
+    background:var(--surface);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:20px 20px 18px;margin:0 0 22px;
+  }
+  .lib-form .label{margin-top:2px}
+  .stoprow{
+    display:grid;gap:8px;margin:0 0 10px;align-items:center;
+    grid-template-columns:104px 1fr 1fr auto;
+  }
+  @media (max-width:620px){.stoprow{grid-template-columns:1fr}}
+  .form-actions{margin-top:20px;align-items:center}
+  .lib-hint{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:60ch}
+  .lib-msg{font-size:13px;color:var(--accent);margin:12px 0 0}
+
   /* ---------- buttons ---------- */
   .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
   .btn{
@@ -188,6 +216,12 @@
     color:var(--accent);background:transparent;
   }
   .btn--sm{min-height:34px;padding:6px 14px;font-size:12px}
+  button.btn{
+    cursor:pointer;font-family:var(--sans);
+    -webkit-appearance:none;appearance:none;
+  }
+  .btn-block{display:flex;width:100%;min-height:48px;margin:10px 0 0}
+  .btn-inline{width:auto;min-height:44px;padding:12px 26px}
   a:focus-visible,.tab:focus-visible{
     outline:2px solid var(--accent);outline-offset:3px;border-radius:999px;
   }
@@ -279,7 +313,47 @@
       </label>
       <button class="btn-solid" type="submit" id="go">Plan trip</button>
     </form>
+    <button class="btn btn-block" type="button" id="open-lib">My Library</button>
     <button class="linkish" type="button" id="change-key">Change or clear API key</button>
+  </div>
+
+  <!-- ============ my library (on-device) ============ -->
+  <div id="library" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">My Library</h1>
+      <p class="summary">Your own hotels, restaurants, sights and itineraries — kept on this device, and folded into any trip you plan for the same city.</p>
+    </header>
+
+    <div id="lib-list"></div>
+
+    <section id="lib-backup">
+      <div class="sec-head">
+        <h2 class="sec-title">Backup</h2>
+        <span class="sec-count">Copy &amp; paste</span>
+      </div>
+      <p class="lib-hint">Nothing here leaves this device. To back up, copy the text below and keep it somewhere safe — a note, an email to yourself. To restore on another device, paste it into Import and tap Load.</p>
+
+      <label class="field">
+        <span class="label">Export</span>
+        <textarea id="lib-export" rows="7" readonly spellcheck="false"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn" type="button" id="lib-copy">Copy</button>
+      </div>
+
+      <label class="field" style="margin-top:26px">
+        <span class="label">Import</span>
+        <textarea id="lib-import" rows="7" spellcheck="false" autocapitalize="off"
+                  autocorrect="off" placeholder="Paste exported library JSON here"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn" type="button" id="lib-load">Load</button>
+      </div>
+      <p class="lib-msg" id="lib-backup-msg" hidden></p>
+    </section>
+
+    <button class="linkish" type="button" id="lib-back">Back to planner</button>
   </div>
 
   <!-- ============ loading ============ -->
@@ -325,7 +399,7 @@
   var STORE_KEY = "anthropic_key";
 
   var $ = function (id) { return document.getElementById(id); };
-  var views = ["setup", "main", "loading", "error", "result"];
+  var views = ["setup", "main", "library", "loading", "error", "result"];
   function show(name) {
     views.forEach(function (v) { $(v).hidden = (v !== name); });
     window.scrollTo(0, 0);
@@ -405,7 +479,8 @@
 
   /* ---------- rendering ---------- */
   function render(trip) {
-    destQ = txt(trip.destination);
+    destQ = txt(trip.destination) || lastDest;
+    mergeLibrary(trip);
     var html = "";
 
     var hotels = arr(trip.hotels);
@@ -413,7 +488,9 @@
       html += section("hotels", "Hotels",
         hotels.length + (hotels.length === 1 ? " stay" : " stays"),
         '<div class="grid">' + hotels.map(function (h) {
-          return '<article class="card"><h3 class="card-name">' + esc(h.name) + "</h3>" +
+          return '<article class="card">' +
+            (h.saved === true ? '<div><span class="tag">★ my saved place</span></div>' : "") +
+            '<h3 class="card-name">' + esc(h.name) + "</h3>" +
             (txt(h.price) ? '<p class="price">' + esc(h.price) + "</p>" : "") +
             '<p class="card-note">' + esc(h.why) + "</p>" +
             '<div class="actions">' + actions(h) + "</div></article>";
@@ -467,7 +544,9 @@
     if (sights.length) {
       html += section("sights", "Sights", sights.length + " to see",
         '<div class="grid">' + sights.map(function (s) {
-          return '<article class="card"><h3 class="card-name">' + esc(s.name) + "</h3>" +
+          return '<article class="card">' +
+            (s.saved === true ? '<div><span class="tag">★ my saved place</span></div>' : "") +
+            '<h3 class="card-name">' + esc(s.name) + "</h3>" +
             '<p class="card-note">' + esc(s.note) + "</p>" +
             '<div class="actions">' + actions(s) + "</div></article>";
         }).join("") + "</div>");
@@ -650,6 +729,298 @@
     });
   }
 
+  /* ================= My Library (this device only) =================
+     Stored under "travel_library" as
+       { hotels:[], restaurants:[], sights:[], itineraries:[] }
+     Everything below is local: no request ever carries it anywhere. */
+
+  var LIB_KEY = "travel_library";
+  var LIB_TYPES = ["hotels", "restaurants", "sights", "itineraries"];
+  var LIB_TITLE = {
+    hotels: "Hotels", restaurants: "Restaurants",
+    sights: "Sights", itineraries: "Itineraries"
+  };
+  var LIB_ONE = {
+    hotels: "hotel", restaurants: "restaurant",
+    sights: "sight", itineraries: "itinerary"
+  };
+  /* [field, label, isTextarea] */
+  var LIB_FIELDS = {
+    hotels: [["name", "Name"], ["city", "City"], ["note", "Note", true],
+             ["price", "Price"], ["website", "Website"]],
+    restaurants: [["name", "Name"], ["city", "City"], ["cuisine", "Cuisine"],
+                  ["note", "Note", true], ["website", "Website"]],
+    sights: [["name", "Name"], ["city", "City"], ["note", "Note", true],
+             ["website", "Website"]],
+    itineraries: [["name", "Name"], ["city", "City"]]
+  };
+
+  var lastDest = "";      /* what the user typed, for city matching */
+  var libDraft = null;    /* {type, id|null, item} while a form is open */
+  var libScroll = false;  /* bring a freshly opened form into view once */
+
+  function newId() {
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+  function emptyLib() {
+    return { hotels: [], restaurants: [], sights: [], itineraries: [] };
+  }
+
+  /* Anything unexpected in storage is dropped rather than trusted. */
+  function normalizeLib(parsed) {
+    var lib = emptyLib();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return lib;
+    LIB_TYPES.forEach(function (type) {
+      arr(parsed[type]).forEach(function (raw) {
+        var item = { id: txt(raw.id) || newId(), name: txt(raw.name), city: txt(raw.city) };
+        if (!item.name) return;
+        if (type === "itineraries") {
+          item.stops = arr(raw.stops).map(function (st) {
+            return { time: txt(st.time), name: txt(st.name), note: txt(st.note) };
+          }).filter(function (st) { return st.name; });
+        } else {
+          item.note = txt(raw.note);
+          item.website = txt(raw.website);
+          if (type === "hotels") item.price = txt(raw.price);
+          if (type === "restaurants") item.cuisine = txt(raw.cuisine);
+        }
+        lib[type].push(item);
+      });
+    });
+    return lib;
+  }
+  function loadLib() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(LIB_KEY); } catch (e) { return emptyLib(); }
+    if (!raw) return emptyLib();
+    try { parsed = JSON.parse(raw); } catch (e) { return emptyLib(); }
+    return normalizeLib(parsed);
+  }
+  function saveLib(lib) {
+    try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); return true; }
+    catch (e) { return false; }
+  }
+  function blankItem(type) {
+    var item = { id: "", name: "", city: "" };
+    if (type === "itineraries") { item.stops = [{ time: "", name: "", note: "" }]; }
+    else {
+      item.note = ""; item.website = "";
+      if (type === "hotels") item.price = "";
+      if (type === "restaurants") item.cuisine = "";
+    }
+    return item;
+  }
+
+  /* ---------- library view ---------- */
+  function libFormHtml(draft) {
+    var it = draft.item;
+    var h = '<form class="lib-form" id="lib-form" novalidate>';
+    LIB_FIELDS[draft.type].forEach(function (f) {
+      var val = esc(it[f[0]] || "");
+      h += '<label class="field"><span class="label">' + esc(f[1]) + "</span>" +
+        (f[2] ? '<textarea data-f="' + f[0] + '" rows="2">' + val + "</textarea>"
+              : '<input type="text" data-f="' + f[0] + '" value="' + val + '">') +
+        "</label>";
+    });
+    if (draft.type === "itineraries") {
+      h += '<span class="label">Stops</span>';
+      arr(it.stops).forEach(function (st, i) {
+        h += '<div class="stoprow">' +
+          '<input type="text" data-s="time" data-i="' + i + '" placeholder="Time" value="' + esc(st.time) + '">' +
+          '<input type="text" data-s="name" data-i="' + i + '" placeholder="Place" value="' + esc(st.name) + '">' +
+          '<input type="text" data-s="note" data-i="' + i + '" placeholder="Note" value="' + esc(st.note) + '">' +
+          '<button class="btn btn--sm" type="button" data-lib="stop-del" data-i="' + i + '">Remove</button>' +
+          "</div>";
+      });
+      h += '<button class="btn btn--sm" type="button" data-lib="stop-add">Add stop</button>';
+    }
+    h += '<div class="actions form-actions">' +
+      '<button class="btn-solid btn-inline" type="submit">Save</button>' +
+      '<button class="btn" type="button" data-lib="cancel">Cancel</button></div>' +
+      '<p class="lib-msg" id="lib-form-msg" hidden></p></form>';
+    return h;
+  }
+
+  function libCardHtml(type, it) {
+    var meta = [txt(it.city), txt(it.cuisine)].filter(function (x) { return x; }).join(" \u00b7 ");
+    var detail;
+    if (type === "itineraries") {
+      var names = arr(it.stops).map(function (st) { return txt(st.name); })
+                               .filter(function (n) { return n; });
+      detail = names.length
+        ? names.length + (names.length === 1 ? " stop: " : " stops: ") + names.join(" \u2192 ")
+        : "No stops yet.";
+    } else {
+      detail = txt(it.note);
+    }
+    return '<article class="card">' +
+      '<h3 class="card-name">' + esc(it.name) + "</h3>" +
+      (meta ? '<p class="card-meta">' + esc(meta) + "</p>" : "") +
+      (txt(it.price) ? '<p class="price">' + esc(it.price) + "</p>" : "") +
+      (detail ? '<p class="card-note">' + esc(detail) + "</p>" : "") +
+      '<div class="actions">' +
+        '<button class="btn btn--sm" type="button" data-lib="edit" data-type="' + type +
+          '" data-id="' + esc(it.id) + '">Edit</button>' +
+        '<button class="btn btn--sm" type="button" data-lib="delete" data-type="' + type +
+          '" data-id="' + esc(it.id) + '">Delete</button>' +
+      "</div></article>";
+  }
+
+  function renderLibrary() {
+    var lib = loadLib();
+    var html = "";
+    LIB_TYPES.forEach(function (type) {
+      var items = lib[type];
+      var body = "";
+      if (libDraft && libDraft.type === type) body += libFormHtml(libDraft);
+      body += items.length
+        ? '<div class="grid">' + items.map(function (it) {
+            return libCardHtml(type, it);
+          }).join("") + "</div>"
+        : '<p class="empty">Nothing saved yet.</p>';
+      body += '<div class="actions" style="margin-top:18px">' +
+        '<button class="btn" type="button" data-lib="add" data-type="' + type + '">Add ' +
+        esc(LIB_ONE[type]) + "</button></div>";
+      html += section("lib-" + type, LIB_TITLE[type],
+                      items.length + " saved", body);
+    });
+    $("lib-list").innerHTML = html;
+    try { $("lib-export").value = JSON.stringify(lib, null, 2); }
+    catch (e) { $("lib-export").value = ""; }
+
+    /* A form opened from a section further down would otherwise be off-screen. */
+    if (libScroll) {
+      libScroll = false;
+      var form = $("lib-form");
+      if (form && form.scrollIntoView) form.scrollIntoView({ block: "center" });
+    }
+  }
+
+  /* Pull whatever is currently typed back into the draft, so a re-render
+     (adding or removing a stop row) never loses it. */
+  function readLibForm() {
+    if (!libDraft) return;
+    var form = $("lib-form");
+    if (!form) return;
+    Array.prototype.forEach.call(form.querySelectorAll("[data-f]"), function (el) {
+      libDraft.item[el.getAttribute("data-f")] = el.value.trim();
+    });
+    if (libDraft.type === "itineraries") {
+      var stops = arr(libDraft.item.stops);
+      Array.prototype.forEach.call(form.querySelectorAll("[data-s]"), function (el) {
+        var i = parseInt(el.getAttribute("data-i"), 10);
+        if (isNaN(i)) return;
+        if (!stops[i]) stops[i] = { time: "", name: "", note: "" };
+        stops[i][el.getAttribute("data-s")] = el.value.trim();
+      });
+      libDraft.item.stops = stops;
+    }
+  }
+
+  function libFormError(msg) {
+    var el = $("lib-form-msg");
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function saveDraft() {
+    readLibForm();
+    if (!libDraft) return;
+    var item = libDraft.item;
+    if (!txt(item.name)) { libFormError("Give it a name first."); return; }
+    if (libDraft.type === "itineraries") {
+      item.stops = arr(item.stops).filter(function (st) { return txt(st.name); });
+      if (!item.stops.length) { libFormError("Add at least one stop with a name."); return; }
+    }
+    var lib = loadLib();
+    var list = lib[libDraft.type];
+    if (libDraft.id) {
+      var found = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === libDraft.id) { item.id = libDraft.id; list[i] = item; found = true; break; }
+      }
+      if (!found) { item.id = libDraft.id; list.push(item); }
+    } else {
+      item.id = newId();
+      list.push(item);
+    }
+    if (!saveLib(lib)) { libFormError("This browser refused to save (private mode?)."); return; }
+    libDraft = null;
+    renderLibrary();
+  }
+
+  function deleteLibItem(type, id) {
+    var lib = loadLib();
+    var keep = lib[type].filter(function (it) { return it.id !== id; });
+    if (keep.length === lib[type].length) return;
+    lib[type] = keep;
+    saveLib(lib);
+    if (libDraft && libDraft.type === type && libDraft.id === id) libDraft = null;
+    renderLibrary();
+  }
+
+  function libBackupMsg(msg) {
+    var el = $("lib-backup-msg");
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  /* ---------- library inside a generated trip ---------- */
+  function cityMatches(city, haystack) {
+    var c = txt(city).toLowerCase();
+    return c ? haystack.indexOf(c) !== -1 : false;
+  }
+  /* name + city, so a saved place maps correctly even in a multi-city trip. */
+  function libMaps(name, city) {
+    var n = txt(name);
+    if (!n) return "";
+    return "https://www.google.com/maps/search/?api=1&query=" +
+           plus(city ? n + " " + city : n);
+  }
+
+  function mergeLibrary(trip) {
+    var lib = loadLib();
+    var hay = (txt(trip.destination) + " " + lastDest).toLowerCase();
+    function forCity(type) {
+      return lib[type].filter(function (it) { return cityMatches(it.city, hay); });
+    }
+
+    trip.hotels = forCity("hotels").map(function (h) {
+      return { name: h.name, why: h.note, price: h.price, website: h.website,
+               maps: libMaps(h.name, h.city), saved: true };
+    }).concat(arr(trip.hotels));
+
+    trip.restaurants = forCity("restaurants").map(function (r) {
+      return { name: r.name, cuisine: r.cuisine, note: r.note, website: r.website,
+               maps: libMaps(r.name, r.city), saved: true };
+    }).concat(arr(trip.restaurants));
+
+    trip.sights = forCity("sights").map(function (g) {
+      return { name: g.name, note: g.note, website: g.website,
+               maps: libMaps(g.name, g.city), saved: true };
+    }).concat(arr(trip.sights));
+
+    trip.itineraries = forCity("itineraries").map(function (it) {
+      return {
+        name: "\u2605 " + txt(it.name),
+        saved: true,
+        days: [{
+          day: 1,
+          stops: arr(it.stops).filter(function (st) { return txt(st.name); })
+                              .map(function (st) {
+            return { time: st.time, name: st.name, note: st.note,
+                     website: "", maps: libMaps(st.name, it.city) };
+          })
+        }]
+      };
+    }).filter(function (it) {
+      return it.days[0].stops.length;
+    }).concat(arr(trip.itineraries));
+
+    return trip;
+  }
+
   /* ---------- wiring ---------- */
   $("setup-form").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -674,6 +1045,7 @@
     e.preventDefault();
     var dest = $("dest-input").value.trim();
     if (!dest) return;
+    lastDest = dest;
     $("dest-input").blur();
     planTrip(dest);
   });
@@ -683,6 +1055,107 @@
     $("key-input").value = "";
     $("setup-err").hidden = true;
     show("setup");
+  });
+
+  $("open-lib").addEventListener("click", function () {
+    libDraft = null;
+    libBackupMsg("");
+    $("lib-import").value = "";
+    renderLibrary();
+    show("library");
+  });
+  $("lib-back").addEventListener("click", function () {
+    libDraft = null;
+    show("main");
+  });
+
+  /* One delegated handler: the list is rebuilt from scratch on every change. */
+  $("lib-list").addEventListener("click", function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest("[data-lib]") : null;
+    if (!btn) return;
+    var act = btn.getAttribute("data-lib");
+    var type = btn.getAttribute("data-type");
+    var id = btn.getAttribute("data-id");
+
+    if (act === "add") {
+      libDraft = { type: type, id: null, item: blankItem(type) };
+      libScroll = true;
+      renderLibrary();
+    } else if (act === "edit") {
+      var lib = loadLib(), match = null;
+      lib[type].forEach(function (it) { if (it.id === id) match = it; });
+      if (!match) return;
+      libDraft = { type: type, id: id, item: match };
+      libScroll = true;
+      renderLibrary();
+    } else if (act === "delete") {
+      if (window.confirm("Delete this saved item?")) deleteLibItem(type, id);
+    } else if (act === "cancel") {
+      libDraft = null;
+      renderLibrary();
+    } else if (act === "stop-add") {
+      readLibForm();
+      if (!libDraft) return;
+      libDraft.item.stops = arr(libDraft.item.stops);
+      libDraft.item.stops.push({ time: "", name: "", note: "" });
+      renderLibrary();
+    } else if (act === "stop-del") {
+      readLibForm();
+      if (!libDraft) return;
+      var i = parseInt(btn.getAttribute("data-i"), 10);
+      libDraft.item.stops = arr(libDraft.item.stops);
+      if (!isNaN(i)) libDraft.item.stops.splice(i, 1);
+      if (!libDraft.item.stops.length) libDraft.item.stops.push({ time: "", name: "", note: "" });
+      renderLibrary();
+    }
+  });
+
+  $("lib-list").addEventListener("submit", function (e) {
+    if (!e.target || e.target.id !== "lib-form") return;
+    e.preventDefault();
+    saveDraft();
+  });
+
+  $("lib-copy").addEventListener("click", function () {
+    var ta = $("lib-export");
+    var done = function () { libBackupMsg("Copied. Paste it somewhere safe."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(done, function () {
+        libBackupMsg("Could not copy — select the text and copy it by hand.");
+      });
+      return;
+    }
+    try {
+      ta.removeAttribute("readonly");
+      ta.focus();
+      ta.setSelectionRange(0, ta.value.length);
+      document.execCommand("copy");
+      ta.setAttribute("readonly", "readonly");
+      done();
+    } catch (err) {
+      ta.setAttribute("readonly", "readonly");
+      libBackupMsg("Could not copy — select the text and copy it by hand.");
+    }
+  });
+
+  $("lib-load").addEventListener("click", function () {
+    var raw = $("lib-import").value.trim();
+    if (!raw) { libBackupMsg("Paste an exported library first."); return; }
+    var parsed = null;
+    try { parsed = JSON.parse(raw); } catch (err) { parsed = null; }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      libBackupMsg("That is not valid library JSON.");
+      return;
+    }
+    var incoming = normalizeLib(parsed);
+    var total = LIB_TYPES.reduce(function (n, t) { return n + incoming[t].length; }, 0);
+    if (!total) { libBackupMsg("No usable items found in that text."); return; }
+    if (!window.confirm("Replace your whole library with these " + total + " items?")) return;
+    if (!saveLib(incoming)) { libBackupMsg("This browser refused to save (private mode?)."); return; }
+    libDraft = null;
+    $("lib-import").value = "";
+    renderLibrary();
+    libBackupMsg("Library replaced — " + total + " items loaded.");
   });
 
   $("err-back").addEventListener("click", function () { show("main"); });
