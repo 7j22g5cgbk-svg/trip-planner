@@ -1,6 +1,6 @@
 # HANDOVER — Travel tooling
 
-**Written:** 2026-09-01 · **For:** a fresh session with no prior context
+**Written:** 2026-09-01 · **Updated:** 2026-09-01 (PWA session) · **For:** a fresh session with no prior context
 **Lives in:** `~/Desktop/trip-planner/` · covers this repo **and** `~/Desktop/MUCHIEZ_COCKPIT`
 
 `MUCHIEZ_COCKPIT/STAND.md` assumes you were there. This file does not. It is the cold-start
@@ -13,7 +13,7 @@ orientation: what exists, where, what state it is in, and what is unverified.
 | Repo | Holds | State |
 |---|---|---|
 | `~/Desktop/MUCHIEZ_COCKPIT` | the desktop brief generator, all tooling, BACKLOG/STAND | uncommitted changes |
-| `~/Desktop/trip-planner` | **the phone app — the file that goes online** | `index.html` modified, uncommitted |
+| `~/Desktop/trip-planner` | **the phone app — the file that goes online** | `index.html` modified + `manifest.webmanifest`, `sw.js` new — all uncommitted |
 
 A cockpit commit does **not** carry the phone app. Both need their own commit in
 GitHub Desktop. Nicole commits manually — never run git commands for her.
@@ -87,6 +87,45 @@ of a parse error.
 ("Now building the itineraries:"). The old greedy first-`{`-to-last-`}` slice
 swallowed trailing prose and broke `JSON.parse`. Do not replace it with a regex.
 
+### C. The phone app is an installable PWA (added 2026-09-01)
+
+`index.html` is now installable to the iPhone home screen and opens offline. Three
+files make that work; nothing about the research or rendering path was touched.
+
+| File | Role |
+|---|---|
+| `manifest.webmanifest` | name/short_name `Travel`, `display: standalone`, theme `#B0553C`, background `#EAF6FF`, 192 + 512 icons marked `any maskable` |
+| `sw.js` | app-shell service worker, cache name `travel-v1` |
+| `icon-180/192/512.png` | already present before this session; 180 is the `apple-touch-icon` |
+
+`index.html` gained only a `<head>` block (manifest link, `theme-color`, the
+`mobile-web-app-capable` / apple meta tags, `apple-touch-icon`) and a guarded
+`serviceWorker.register("./sw.js")` at the end of the existing IIFE. The viewport
+meta and `apple-mobile-web-app-capable` were already there and were left alone.
+
+**Every path is relative (`./`), and this is not cosmetic.** The site is served
+from a GitHub Pages *subpath* (`username.github.io/trip-planner/`). A single
+leading `/` in the manifest, the icons or the register call resolves to the domain
+root and 404s — the app silently stops being installable. Never write a leading
+slash in these files.
+
+Service worker behaviour:
+- install caches `./`, `./index.html`, `./manifest.webmanifest` and the three icons;
+  activate deletes any cache whose name is not `travel-v1`.
+- navigations are **network-first**, falling back to cached `./index.html` offline.
+- other same-origin GETs (icons, manifest) are cache-first.
+- `api.anthropic.com`, all other cross-origin requests, and every non-GET request
+  fall through untouched. **The API is never cached** — a trip brief always comes
+  off the live network.
+
+**Trap:** the shell is pinned to `travel-v1`. Ship a change to `index.html` without
+bumping that string and returning visitors keep the old page from cache. Bump to
+`travel-v2` (and so on) in the same commit as any `index.html` change.
+
+**Trap:** a service worker only registers over HTTPS or on `localhost`. Opening the
+file by double-clicking it (`file://`) will never show an install prompt and never
+go offline — that is not a bug to chase. Test on the live Pages URL.
+
 ---
 
 ## 3. API key
@@ -130,6 +169,10 @@ HTTP 200.
 - The phone app has **never completed a real run** on the iPhone.
 - No page has been opened in iPhone Quick Look to confirm the static-HTML fix
   actually solves the blank-page symptom.
+- The PWA has **never been installed or opened offline on the iPhone**. The
+  manifest is valid JSON and every path was checked to be relative, but no
+  service worker has ever registered, cached, or served a request — none of it
+  has run anywhere. It has not been pushed to Pages yet.
 
 When testing the phone app, expect **fewer Website buttons** now that searches are
 capped at 6 — the prompt correctly writes `""` when it cannot verify a site. That
@@ -146,5 +189,8 @@ built client-side and can never be missing.
 - Five older trip pages exist locally but not in iCloud (Lisbon 3d, London 2d,
   London 4d, Amsterdam 1d, Marseille 2d) — the copy step only fires for trips built
   after 2026-08-31. `_preview.html` is a throwaway; skip it.
+- `trip-planner` has **no `Backlog.md` or `Stand.md`** of its own; the "Finish"
+  routine skips both here. Open items for this repo live in the cockpit's backlog
+  or in this file.
 - Full list of open items: `MUCHIEZ_COCKPIT/BACKLOG.md`. Previous session's
   narrative: `MUCHIEZ_COCKPIT/STAND.md`.
