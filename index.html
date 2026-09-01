@@ -177,6 +177,38 @@
     padding:4px 10px;margin:0 0 12px;white-space:nowrap;
   }
 
+  /* ---------- sticky bar on the brief ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:10px;
+    margin:0 -20px;
+    padding:calc(10px + env(safe-area-inset-top)) 20px 10px;
+    background:rgba(250,247,242,.94);
+    -webkit-backdrop-filter:saturate(180%) blur(12px);
+    backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar .push{margin-left:auto}
+  .topbtn{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    font-family:var(--sans);font-size:13px;font-weight:500;letter-spacing:.01em;
+    color:var(--accent);background:transparent;
+    border:1px solid var(--accent-line);border-radius:999px;
+    min-height:40px;padding:8px 16px;white-space:nowrap;
+  }
+  .topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .topbar + .masthead{padding-top:28px}
+
+  /* ---------- temporary merge diagnostic ---------- */
+  .debug{
+    margin:24px 0 0;padding:12px 14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.65;color:var(--muted);
+    background:var(--surface);
+    border:1px dashed var(--accent-line);border-radius:10px;
+    white-space:pre-wrap;word-break:break-word;
+  }
+
   /* ---------- library ---------- */
   textarea{
     width:100%;font-family:var(--sans);
@@ -378,6 +410,10 @@
 
   <!-- ============ result ============ -->
   <div id="result" hidden>
+    <div class="topbar">
+      <button class="topbtn" type="button" id="r-new">← New search</button>
+      <button class="topbtn push" type="button" id="r-lib">My Library</button>
+    </div>
     <header class="masthead">
       <p class="eyebrow">Travel Brief</p>
       <h1 class="destination" id="r-dest"></h1>
@@ -385,6 +421,7 @@
     </header>
     <main id="r-content"></main>
     <footer id="r-footer"></footer>
+    <p class="debug" id="r-debug"></p>
     <button class="linkish" type="button" id="again">Plan another trip</button>
   </div>
 
@@ -559,6 +596,7 @@
     $("r-footer").textContent =
       "Researched " + new Date().toLocaleDateString() +
       " · verify hours and availability before you go.";
+    $("r-debug").textContent = mergeDebug();
 
     /* tab switching */
     var root = $("r-content");
@@ -758,6 +796,8 @@
   var lastDest = "";      /* what the user typed, for city matching */
   var libDraft = null;    /* {type, id|null, item} while a form is open */
   var libScroll = false;  /* bring a freshly opened form into view once */
+  var libReturn = "main"; /* which view the library was opened from */
+  var lastMerge = null;   /* what the last merge saw, for the debug line */
 
   function newId() {
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -967,9 +1007,31 @@
   }
 
   /* ---------- library inside a generated trip ---------- */
+
+  /* Lowercase, strip accents, and reduce every run of punctuation or
+     whitespace to a single space, so "  Zürich " and "Zurich," compare equal. */
+  function fold(v) {
+    var out = txt(v).toLowerCase();
+    if (out.normalize) {
+      try { out = out.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {}
+    }
+    return out.replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  /* "Lisbon, Portugal" -> ["lisbon", "portugal"], so a city saved with its
+     country still matches a destination that names only the city. */
+  function cityParts(city) {
+    return txt(city).split(/[,;\/|\u2013\u2014-]+/).map(fold)
+                    .filter(function (part) { return part; });
+  }
+  /* haystack must already be folded. Whole-word containment, so the saved
+     city can sit anywhere in the destination text. */
   function cityMatches(city, haystack) {
-    var c = txt(city).toLowerCase();
-    return c ? haystack.indexOf(c) !== -1 : false;
+    var parts = cityParts(city);
+    var padded = " " + haystack + " ";
+    for (var i = 0; i < parts.length; i++) {
+      if (padded.indexOf(" " + parts[i] + " ") !== -1) return true;
+    }
+    return false;
   }
   /* name + city, so a saved place maps correctly even in a multi-city trip. */
   function libMaps(name, city) {
@@ -979,11 +1041,44 @@
            plus(city ? n + " " + city : n);
   }
 
+  /* TEMPORARY: shown at the foot of the brief while we chase a merge that
+     did not happen. Delete this function, its call, and #r-debug to remove. */
+  function mergeDebug() {
+    var d = lastMerge;
+    if (!d) return "";
+    var rests = d.lib.restaurants.map(function (r) {
+      return txt(r.name) + " [city: " + (txt(r.city) || "— none —") + "]";
+    });
+    var total = 0;
+    LIB_TYPES.forEach(function (t) { total += d.counts[t]; });
+    return "DEBUG (temporary)\n" +
+      "match text: \"" + d.hay + "\"\n" +
+      "library loaded: " + d.lib.hotels.length + " hotels, " +
+        d.lib.restaurants.length + " restaurants, " + d.lib.sights.length + " sights, " +
+        d.lib.itineraries.length + " itineraries\n" +
+      "library restaurants: " + (rests.length ? rests.join(" · ") : "none saved") + "\n" +
+      "matched: " + d.counts.hotels + " hotels, " + d.counts.restaurants + " restaurants, " +
+        d.counts.sights + " sights, " + d.counts.itineraries + " itineraries (" +
+        total + " total)";
+  }
+
   function mergeLibrary(trip) {
-    var lib = loadLib();
-    var hay = (txt(trip.destination) + " " + lastDest).toLowerCase();
+    var lib = loadLib();   /* read fresh from storage on every render */
+
+    /* Match against the model's destination AND what the user typed — the
+       two usually agree, so identical text is only kept once. */
+    var pieces = [];
+    [txt(trip.destination), lastDest].forEach(function (v) {
+      var f = fold(v);
+      if (f && pieces.indexOf(f) === -1) pieces.push(f);
+    });
+    var hay = pieces.join(" ");
+    var counts = { hotels: 0, restaurants: 0, sights: 0, itineraries: 0 };
+    lastMerge = { hay: hay, lib: lib, counts: counts };
     function forCity(type) {
-      return lib[type].filter(function (it) { return cityMatches(it.city, hay); });
+      var hits = lib[type].filter(function (it) { return cityMatches(it.city, hay); });
+      counts[type] = hits.length;
+      return hits;
     }
 
     trip.hotels = forCity("hotels").map(function (h) {
@@ -1057,16 +1152,24 @@
     show("setup");
   });
 
-  $("open-lib").addEventListener("click", function () {
+  /* The library is reachable from the planner and from a finished brief;
+     "back" returns to whichever one you came from. */
+  function openLibrary(from) {
+    libReturn = from;
     libDraft = null;
     libBackupMsg("");
     $("lib-import").value = "";
+    $("lib-back").textContent =
+      from === "result" ? "← Back to the trip" : "← Back to planner";
     renderLibrary();
     show("library");
-  });
+  }
+  $("open-lib").addEventListener("click", function () { openLibrary("main"); });
+  $("r-lib").addEventListener("click", function () { openLibrary("result"); });
+  $("r-new").addEventListener("click", function () { show("main"); });
   $("lib-back").addEventListener("click", function () {
     libDraft = null;
-    show("main");
+    show(libReturn === "result" ? "result" : "main");
   });
 
   /* One delegated handler: the list is rebuilt from scratch on every change. */
