@@ -538,12 +538,13 @@
       "curated non-touristy spots. Return ONLY a JSON object (no prose, no code fences) with " +
       "this shape: { destination, summary, hotels:[{name,why,price,website,maps}], " +
       "itineraries:[{name,days:[{day,stops:[{time,name,note,maps,website}],route_maps}]}] " +
-      "(produce 3-4 genuinely different itineraries), " +
+      "(produce EXACTLY 3 genuinely different itineraries), " +
       "restaurants:[{name,cuisine,note,website,maps,saved}], sights:[{name,note,maps,website}] }. " +
       "Sights and stops must be REAL named places, never activities/meals. For " +
       "hotels/restaurants/sights/stops, use web search to find the official website and put the " +
       "verified URL in website, else empty string. Set saved=false everywhere. Flag anything " +
-      "unverifiable in note. Never invent places or links.";
+      "unverifiable in note. Never invent places or links. Keep it tight: the summary is at " +
+      "most 25 words, and every note field is under 15 words.";
   }
 
   /* ---------- API call ---------- */
@@ -554,8 +555,8 @@
 
     var body = {
       model: "claude-sonnet-5",
-      max_tokens: 8000,
-      tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 20 }],
+      max_tokens: 16000,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 20 }],
       messages: [{ role: "user", content: buildPrompt(dest) }]
     };
 
