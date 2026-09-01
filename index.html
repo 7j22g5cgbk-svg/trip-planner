@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#B0553C">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Travel">
+<link rel="apple-touch-icon" href="./icon-180.png">
 <title>Travel — Claude</title>
 <style>
   :root{
@@ -683,6 +689,12 @@
   $("again").addEventListener("click", function () { show("main"); });
 
   show(getKey() ? "main" : "setup");
+
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js");
+    });
+  }
 })();
 </script>
 </body>
