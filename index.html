@@ -199,6 +199,17 @@
   .topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .topbar + .masthead{padding-top:28px}
 
+  /* ---------- what is actually in localStorage right now ---------- */
+  .stored-now{
+    margin:20px 0 0;padding:10px 14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--muted);
+    background:var(--surface);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;word-break:break-word;
+  }
+  .lib-form .stored-now{margin:16px 0 0}
+
   /* ---------- "your saved places are in here" ---------- */
   .saved-note{
     margin:18px 0 0;
@@ -354,6 +365,7 @@
     </header>
 
     <div id="lib-list"></div>
+    <p class="stored-now" id="lib-stored"></p>
 
     <section id="lib-backup">
       <div class="sec-head">
@@ -826,12 +838,47 @@
     });
     return lib;
   }
+  /* loadLib() substitutes an empty library when the stored value cannot be
+     read. That empty result must never be written back, or one unreadable
+     read would erase everything, so every read records WHY it was empty and
+     the write paths refuse to overwrite data they could not read. */
+  var libUnreadable = "";   /* "" when the read was clean */
+
   function loadLib() {
     var raw = null, parsed = null;
-    try { raw = localStorage.getItem(LIB_KEY); } catch (e) { return emptyLib(); }
-    if (!raw) return emptyLib();
-    try { parsed = JSON.parse(raw); } catch (e) { return emptyLib(); }
+    libUnreadable = "";
+    try { raw = localStorage.getItem(LIB_KEY); }
+    catch (e) {
+      libUnreadable = "this browser would not let the page read its storage";
+      return emptyLib();
+    }
+    if (!raw) return emptyLib();          /* genuinely empty: safe to write */
+    try { parsed = JSON.parse(raw); }
+    catch (e) {
+      libUnreadable = "the saved data is there but is not readable JSON";
+      return emptyLib();
+    }
     return normalizeLib(parsed);
+  }
+
+  /* Read straight back out of localStorage — no caching, no normalising —
+     so the line under the form reflects what is actually stored. */
+  function storedNow() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(LIB_KEY); }
+    catch (e) {
+      return "Stored now: cannot read localStorage in this browser (" +
+             ((e && e.name) || "error") + ").";
+    }
+    if (raw === null) return "Stored now: no \u201ctravel_library\u201d entry yet.";
+    try { parsed = JSON.parse(raw); }
+    catch (e) {
+      return "Stored now: \u201ctravel_library\u201d holds " + raw.length +
+             " characters that will not parse \u2014 nothing was overwritten.";
+    }
+    function n(k) { return parsed && Array.isArray(parsed[k]) ? parsed[k].length : 0; }
+    return "Stored now: " + n("restaurants") + " restaurants, " + n("hotels") +
+           " hotels, " + n("sights") + " sights, " + n("itineraries") + " itineraries.";
   }
   function saveLib(lib) {
     try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); return true; }
@@ -872,9 +919,10 @@
       h += '<button class="btn btn--sm" type="button" data-lib="stop-add">Add stop</button>';
     }
     h += '<div class="actions form-actions">' +
-      '<button class="btn-solid btn-inline" type="submit">Save</button>' +
+      '<button class="btn-solid btn-inline" type="button" data-lib="save">Save</button>' +
       '<button class="btn" type="button" data-lib="cancel">Cancel</button></div>' +
-      '<p class="lib-msg" id="lib-form-msg" hidden></p></form>';
+      '<p class="lib-msg" id="lib-form-msg" hidden></p>' +
+      '<p class="stored-now">' + esc(storedNow()) + "</p></form>";
     return h;
   }
 
@@ -922,6 +970,8 @@
                       items.length + " saved", body);
     });
     $("lib-list").innerHTML = html;
+    bindLibControls();
+    $("lib-stored").textContent = storedNow();
     try { $("lib-export").value = JSON.stringify(lib, null, 2); }
     catch (e) { $("lib-export").value = ""; }
 
@@ -930,6 +980,68 @@
       libScroll = false;
       var form = $("lib-form");
       if (form && form.scrollIntoView) form.scrollIntoView({ block: "center" });
+    }
+  }
+
+  /* Every control gets its own handler after each render. Nothing here
+     relies on events bubbling out of markup that innerHTML just replaced,
+     and the form has no submit button, so a tap can never navigate the page. */
+  function bindLibControls() {
+    var host = $("lib-list");
+    var btns = host.querySelectorAll("[data-lib]");
+    Array.prototype.forEach.call(btns, function (btn) {
+      btn.onclick = function () {
+        libAction(btn.getAttribute("data-lib"), btn);
+        return false;
+      };
+    });
+    var form = $("lib-form");
+    if (form) {
+      /* belt and braces: if a stray Enter still submits, save, never navigate */
+      form.onsubmit = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        saveDraft();
+        return false;
+      };
+    }
+  }
+
+  function libAction(act, btn) {
+    var type = btn.getAttribute("data-type");
+    var id = btn.getAttribute("data-id");
+
+    if (act === "save") {
+      saveDraft();
+    } else if (act === "add") {
+      libDraft = { type: type, id: null, item: blankItem(type) };
+      libScroll = true;
+      renderLibrary();
+    } else if (act === "edit") {
+      var lib = loadLib(), match = null;
+      lib[type].forEach(function (it) { if (it.id === id) match = it; });
+      if (!match) return;
+      libDraft = { type: type, id: id, item: match };
+      libScroll = true;
+      renderLibrary();
+    } else if (act === "delete") {
+      if (window.confirm("Delete this saved item?")) deleteLibItem(type, id);
+    } else if (act === "cancel") {
+      libDraft = null;
+      renderLibrary();
+    } else if (act === "stop-add") {
+      readLibForm();
+      if (!libDraft) return;
+      libDraft.item.stops = arr(libDraft.item.stops);
+      libDraft.item.stops.push({ time: "", name: "", note: "" });
+      renderLibrary();
+    } else if (act === "stop-del") {
+      readLibForm();
+      if (!libDraft) return;
+      var i = parseInt(btn.getAttribute("data-i"), 10);
+      libDraft.item.stops = arr(libDraft.item.stops);
+      if (!isNaN(i)) libDraft.item.stops.splice(i, 1);
+      if (!libDraft.item.stops.length) libDraft.item.stops.push({ time: "", name: "", note: "" });
+      renderLibrary();
     }
   }
 
@@ -971,6 +1083,11 @@
       if (!item.stops.length) { libFormError("Add at least one stop with a name."); return; }
     }
     var lib = loadLib();
+    if (libUnreadable) {
+      libFormError("Nothing was changed \u2014 " + libUnreadable +
+                   ". Copy it out under Backup before saving over it.");
+      return;
+    }
     var list = lib[libDraft.type];
     if (libDraft.id) {
       var found = false;
@@ -989,6 +1106,7 @@
 
   function deleteLibItem(type, id) {
     var lib = loadLib();
+    if (libUnreadable) return;   /* never delete out of data we could not read */
     var keep = lib[type].filter(function (it) { return it.id !== id; });
     if (keep.length === lib[type].length) return;
     lib[type] = keep;
@@ -1136,7 +1254,7 @@
     $("lib-import").value = "";
     $("lib-back").textContent =
       from === "result" ? "← Back to the trip" : "← Back to planner";
-    renderLibrary();
+    renderLibrary();          /* also refreshes the "Stored now" line */
     show("library");
   }
   $("open-lib").addEventListener("click", function () { openLibrary("main"); });
@@ -1147,51 +1265,10 @@
     show(libReturn === "result" ? "result" : "main");
   });
 
-  /* One delegated handler: the list is rebuilt from scratch on every change. */
-  $("lib-list").addEventListener("click", function (e) {
-    var btn = e.target && e.target.closest ? e.target.closest("[data-lib]") : null;
-    if (!btn) return;
-    var act = btn.getAttribute("data-lib");
-    var type = btn.getAttribute("data-type");
-    var id = btn.getAttribute("data-id");
-
-    if (act === "add") {
-      libDraft = { type: type, id: null, item: blankItem(type) };
-      libScroll = true;
-      renderLibrary();
-    } else if (act === "edit") {
-      var lib = loadLib(), match = null;
-      lib[type].forEach(function (it) { if (it.id === id) match = it; });
-      if (!match) return;
-      libDraft = { type: type, id: id, item: match };
-      libScroll = true;
-      renderLibrary();
-    } else if (act === "delete") {
-      if (window.confirm("Delete this saved item?")) deleteLibItem(type, id);
-    } else if (act === "cancel") {
-      libDraft = null;
-      renderLibrary();
-    } else if (act === "stop-add") {
-      readLibForm();
-      if (!libDraft) return;
-      libDraft.item.stops = arr(libDraft.item.stops);
-      libDraft.item.stops.push({ time: "", name: "", note: "" });
-      renderLibrary();
-    } else if (act === "stop-del") {
-      readLibForm();
-      if (!libDraft) return;
-      var i = parseInt(btn.getAttribute("data-i"), 10);
-      libDraft.item.stops = arr(libDraft.item.stops);
-      if (!isNaN(i)) libDraft.item.stops.splice(i, 1);
-      if (!libDraft.item.stops.length) libDraft.item.stops.push({ time: "", name: "", note: "" });
-      renderLibrary();
-    }
-  });
-
+  /* Controls are bound directly in bindLibControls(). This only stops a
+     stray form submission from navigating the page away. */
   $("lib-list").addEventListener("submit", function (e) {
-    if (!e.target || e.target.id !== "lib-form") return;
-    e.preventDefault();
-    saveDraft();
+    if (e && e.preventDefault) e.preventDefault();
   });
 
   $("lib-copy").addEventListener("click", function () {
