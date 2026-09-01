@@ -199,6 +199,25 @@
   .topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .topbar + .masthead{padding-top:28px}
 
+  /* ---------- temporary merge diagnostic ---------- */
+  .mergedbg{
+    margin:22px 0 0;padding:14px 16px;
+    background:var(--surface);
+    border:1px dashed var(--accent-line);border-radius:10px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.65;color:var(--muted);
+    overflow-x:auto;
+  }
+  .mergedbg-title{
+    margin:0 0 10px;font-family:var(--sans);font-size:11px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
+  }
+  .mergedbg-row{margin:0;word-break:break-word}
+  .mergedbg-head{margin:12px 0 2px;color:var(--ink)}
+  .mergedbg-item{padding-left:14px}
+  .mergedbg-good{color:#3F6B4A}
+  .mergedbg-bad{color:var(--accent)}
+
   /* ---------- what is actually in localStorage right now ---------- */
   .stored-now{
     margin:20px 0 0;padding:10px 14px;
@@ -430,6 +449,7 @@
     <main id="r-content"></main>
     <footer id="r-footer"></footer>
     <p class="saved-note" id="r-saved" hidden></p>
+    <div class="mergedbg" id="r-merge" hidden></div>
     <button class="linkish" type="button" id="again">Plan another trip</button>
   </div>
 
@@ -606,6 +626,8 @@
       " · verify hours and availability before you go.";
     $("r-saved").textContent = "Saved \u2713 \u00b7 your library places are in this brief.";
     $("r-saved").hidden = !(lastMerge && lastMerge.any);
+    $("r-merge").innerHTML = mergeReportHtml();
+    $("r-merge").hidden = false;
 
     /* tab switching */
     var root = $("r-content");
@@ -1138,15 +1160,34 @@
     return txt(city).split(/[,;\/|\u2013\u2014-]+/).map(fold)
                     .filter(function (part) { return part; });
   }
-  /* haystack must already be folded. Whole-word containment, so the saved
-     city can sit anywhere in the destination text. */
-  function cityMatches(city, haystack) {
-    var parts = cityParts(city);
+  /* The rule, in order:
+       1. the trimmed, lowercased city appears anywhere in the trimmed,
+          lowercased destination text  ("Lisbon" in "Lisbon, 1 day"), then
+       2. the same test on folded text, per comma-separated part, so
+          "St. Ives" still matches "St Ives" and "Lisbon, Portugal" still
+          matches a destination that names only the city.
+     Returns why, so the debug panel can explain every decision.
+     plainDest is lowercased/trimmed raw text; haystack is folded. */
+  function cityCheck(city, haystack, plainDest) {
+    var raw = txt(city);
+    if (!raw) {
+      return { matched: false, why: "no city saved \u2014 it can never match" };
+    }
+    var plainCity = raw.toLowerCase();
+    if (plainDest.indexOf(plainCity) !== -1) {
+      return { matched: true, why: '"' + plainCity + '" is inside "' + plainDest + '"' };
+    }
+    var parts = cityParts(raw);
     var padded = " " + haystack + " ";
     for (var i = 0; i < parts.length; i++) {
-      if (padded.indexOf(" " + parts[i] + " ") !== -1) return true;
+      if (padded.indexOf(" " + parts[i] + " ") !== -1) {
+        return { matched: true, why: '"' + parts[i] + '" matches a word in "' + haystack + '"' };
+      }
     }
-    return false;
+    return { matched: false, why: '"' + plainCity + '" is not in "' + plainDest + '"' };
+  }
+  function cityMatches(city, haystack, plainDest) {
+    return cityCheck(city, haystack, plainDest).matched;
   }
   /* name + city, so a saved place maps correctly even in a multi-city trip. */
   function libMaps(name, city) {
@@ -1154,6 +1195,48 @@
     if (!n) return "";
     return "https://www.google.com/maps/search/?api=1&query=" +
            plus(city ? n + " " + city : n);
+  }
+
+  /* TEMPORARY merge diagnostic, shown at the foot of the trip screen.
+     To remove it later: delete this function, the #r-merge element, the
+     .mergedbg rules, and the two lines that fill it in render(). */
+  function mergeReportHtml() {
+    var d = lastMerge;
+    if (!d) return "";
+    var h = '<p class="mergedbg-title">Merge debug (temporary)</p>';
+
+    h += '<p class="mergedbg-row">destination used: "' + esc(d.plainDest) + '"</p>';
+    h += '<p class="mergedbg-row">&nbsp;&nbsp;from the model: "' + esc(d.destModel) +
+         '" &middot; you typed: "' + esc(d.destTyped) + '"</p>';
+    h += '<p class="mergedbg-row">compared against (folded): "' + esc(d.hay) + '"</p>';
+    if (d.unreadable) {
+      h += '<p class="mergedbg-row mergedbg-bad">library could NOT be read: ' +
+           esc(d.unreadable) + "</p>";
+    }
+
+    var loaded = LIB_TYPES.map(function (t) {
+      return t + " " + d.sections[t].loaded;
+    }).join(" \u00b7 ");
+    h += '<p class="mergedbg-row">library loaded from "travel_library": ' + esc(loaded) + "</p>";
+
+    LIB_TYPES.forEach(function (type) {
+      var sec = d.sections[type];
+      h += '<p class="mergedbg-row mergedbg-head">' + esc(LIB_TITLE[type]) +
+           " (" + sec.loaded + " saved)</p>";
+      if (!sec.rows.length) {
+        h += '<p class="mergedbg-row mergedbg-item">(none saved)</p>';
+        return;
+      }
+      sec.rows.forEach(function (r) {
+        h += '<p class="mergedbg-row mergedbg-item ' +
+             (r.matched ? "mergedbg-good" : "mergedbg-bad") + '">' +
+             (r.matched ? "\u2713 included" : "\u2717 skipped") +
+             " \u2014 " + esc(r.name || "(no name)") +
+             " \u2014 city: " + (r.city ? '"' + esc(r.city) + '"' : "(empty)") +
+             " \u2014 " + esc(r.why) + "</p>";
+      });
+    });
+    return h;
   }
 
   function mergeLibrary(trip) {
@@ -1167,9 +1250,33 @@
       if (f && pieces.indexOf(f) === -1) pieces.push(f);
     });
     var hay = pieces.join(" ");
-    lastMerge = { any: false };
+
+    /* the same two destination strings, lowercased but otherwise untouched */
+    var plainPieces = [];
+    [txt(trip.destination), txt(lastDest)].forEach(function (v) {
+      var t = v.toLowerCase().trim();
+      if (t && plainPieces.indexOf(t) === -1) plainPieces.push(t);
+    });
+    var plainDest = plainPieces.join(" ");
+
+    lastMerge = {
+      any: false,
+      destModel: txt(trip.destination),
+      destTyped: txt(lastDest),
+      plainDest: plainDest,
+      hay: hay,
+      unreadable: libUnreadable,
+      sections: {}
+    };
     function forCity(type) {
-      var hits = lib[type].filter(function (it) { return cityMatches(it.city, hay); });
+      var hits = [], rows = [];
+      lib[type].forEach(function (it) {
+        var check = cityCheck(it.city, hay, plainDest);
+        rows.push({ name: txt(it.name), city: txt(it.city),
+                    matched: check.matched, why: check.why });
+        if (check.matched) hits.push(it);
+      });
+      lastMerge.sections[type] = { loaded: lib[type].length, rows: rows };
       if (hits.length) lastMerge.any = true;
       return hits;
     }
