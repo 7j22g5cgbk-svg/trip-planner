@@ -1,10 +1,24 @@
-/* The published snapshot of the library.
-   Replace this whole file with the text from "Publish for friends"
-   in the main app, then commit and push. */
 window.SHARED_LIBRARY = {
   "hotels": [],
-  "restaurants": [],
+  "restaurants": [
+    {
+      "id": "hboou29smtjwdikb",
+      "name": "Palacio Do Grilo",
+      "city": "Lisbon",
+      "note": "",
+      "website": "",
+      "cuisine": ""
+    },
+    {
+      "id": "yr0hh7romtjwfy9g",
+      "name": "Gymkhana",
+      "city": "London",
+      "note": "",
+      "website": "",
+      "cuisine": ""
+    }
+  ],
   "sights": [],
   "itineraries": [],
-  "updated": ""
+  "updated": "2026-09-02"
 };
