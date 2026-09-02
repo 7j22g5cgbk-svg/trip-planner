@@ -176,13 +176,6 @@
     border-top:1px solid var(--line);
     color:var(--muted);font-size:12.5px;
   }
-  footer p{margin:0}
-  .loaded{
-    margin:12px 0 0;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:11.5px;line-height:1.6;color:var(--muted);
-    word-break:break-word;
-  }
 </style>
 </head>
 <body>
@@ -201,10 +194,7 @@
 
   <main id="content"></main>
 
-  <footer>
-    <p id="foot"></p>
-    <p class="loaded" id="loaded"></p>
-  </footer>
+  <footer id="foot"></footer>
 
 </div>
 
@@ -474,20 +464,6 @@
     $("filterbar").hidden = false;
   }
 
-  /* Counted straight off the global, so this line reports what the page is
-     actually holding rather than what the renderer made of it. An old cached
-     data.js shows up here as the wrong counts, or an older published date. */
-  function loadedLine() {
-    var raw = window.SHARED_LIBRARY;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-      return "Loaded: nothing — ./data.js did not load.";
-    }
-    function n(k) { return Array.isArray(raw[k]) ? raw[k].length : 0; }
-    return "Loaded: " + n("restaurants") + " restaurants, " + n("hotels") +
-           " hotels, " + n("sights") + " sights, " + n("itineraries") + " itineraries" +
-           (txt(raw.updated) ? " · published " + txt(raw.updated) : "") + ".";
-  }
-
   function boot() {
     var raw = window.SHARED_LIBRARY;
     loaded = !!(raw && typeof raw === "object" && !Array.isArray(raw));
@@ -497,7 +473,6 @@
       (LIB.updated ? " · updated " + prettyDate(LIB.updated) : "");
     buildFilter();
     render();
-    $("loaded").textContent = loadedLine();
   }
 
   /* The frame comes from this file, but the places come from a second file,

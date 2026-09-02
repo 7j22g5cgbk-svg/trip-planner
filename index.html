@@ -199,26 +199,7 @@
   .topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .topbar + .masthead{padding-top:28px}
 
-  /* ---------- temporary merge diagnostic ---------- */
-  .mergedbg{
-    margin:22px 0 0;padding:14px 16px;
-    background:var(--surface);
-    border:1px dashed var(--accent-line);border-radius:10px;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:11.5px;line-height:1.65;color:var(--muted);
-    overflow-x:auto;
-  }
-  .mergedbg-title{
-    margin:0 0 10px;font-family:var(--sans);font-size:11px;
-    letter-spacing:.16em;text-transform:uppercase;color:var(--accent);
-  }
-  .mergedbg-row{margin:0;word-break:break-word}
-  .mergedbg-head{margin:12px 0 2px;color:var(--ink)}
-  .mergedbg-item{padding-left:14px}
-  .mergedbg-good{color:#3F6B4A}
-  .mergedbg-bad{color:var(--accent)}
-
-  /* ---------- what is actually in localStorage right now ---------- */
+  /* ---------- storage trouble, when there is any ---------- */
   .stored-now{
     margin:20px 0 0;padding:10px 14px;
     font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
@@ -551,7 +532,6 @@
     <main id="r-content"></main>
     <footer id="r-footer"></footer>
     <p class="saved-note" id="r-saved" hidden></p>
-    <div class="mergedbg" id="r-merge" hidden></div>
     <button class="linkish" type="button" id="again">Plan another trip</button>
   </div>
 
@@ -827,37 +807,35 @@
     return writeJson(FAV_KEY, kept);
   }
 
-  /* Counted straight out of localStorage — no caching, no normalising — so
-     the confirmation line reflects what is actually stored right now. */
-  function storedLine(saved) {
-    var favN = null, voteN = null, raw = null, parsed = null;
+  /* Read straight out of localStorage. Returns "" when both stores are
+     healthy — a save says so with a tick, not with a tally — and the honest
+     description of the trouble when there is any. */
+  function storageTrouble() {
+    var raw = null, parsed = null;
     try { raw = localStorage.getItem(FAV_KEY); }
     catch (e) {
       return "Cannot read localStorage in this browser (" + ((e && e.name) || "error") + ").";
     }
-    if (raw === null) favN = 0;
-    else {
-      try { parsed = JSON.parse(raw); favN = Array.isArray(parsed) ? parsed.length : null; }
-      catch (e) { favN = null; }
+    if (raw !== null) {
+      try { parsed = JSON.parse(raw); }
+      catch (e) { return "Your favorites will not parse \u2014 nothing was overwritten."; }
+      if (!Array.isArray(parsed)) {
+        return "Your favorites are not in the shape this page writes \u2014 nothing was overwritten.";
+      }
     }
     raw = null; parsed = null;
     try { raw = localStorage.getItem(FB_KEY); }
     catch (e) {
       return "Cannot read localStorage in this browser (" + ((e && e.name) || "error") + ").";
     }
-    if (raw === null) voteN = 0;
-    else {
-      try {
-        parsed = JSON.parse(raw);
-        voteN = (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-          ? Object.keys(parsed).length : null;
-      } catch (e) { voteN = null; }
+    if (raw !== null) {
+      try { parsed = JSON.parse(raw); }
+      catch (e) { return "Your votes will not parse \u2014 nothing was overwritten."; }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return "Your votes are not in the shape this page writes \u2014 nothing was overwritten.";
+      }
     }
-    return (saved ? "Saved \u2713 \u2014 " : "Stored now: ") +
-      (favN === null ? "favorites unreadable" : favN + (favN === 1 ? " favorite" : " favorites")) +
-      ", " +
-      (voteN === null ? "votes unreadable" : voteN + (voteN === 1 ? " vote" : " votes")) +
-      " stored.";
+    return "";
   }
 
   var toastTimer = null;
@@ -867,7 +845,7 @@
     el.textContent = msg;
     el.hidden = false;
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, 4500);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 2000);
   }
 
   /* ---------- place cards with feedback controls ----------
@@ -966,7 +944,7 @@
       return;
     }
     repaintCard(id);
-    toast(storedLine(true));
+    toast(storageTrouble() || "Saved \u2713");
   }
 
   /* ---------- rendering ---------- */
@@ -1049,8 +1027,6 @@
       " · verify hours and availability before you go.";
     $("r-saved").textContent = "Saved \u2713 \u00b7 your library places are in this brief.";
     $("r-saved").hidden = !(lastMerge && lastMerge.any);
-    $("r-merge").innerHTML = mergeReportHtml();
-    $("r-merge").hidden = false;
 
     /* One handler per button, set directly on the button, after the paint. */
     Object.keys(cardReg).forEach(function (id) { bindCard(id); });
@@ -1375,24 +1351,22 @@
     return normalizeLib(parsed);
   }
 
-  /* Read straight back out of localStorage — no caching, no normalising —
-     so the line under the form reflects what is actually stored. */
+  /* Read straight back out of localStorage. "" when the library is
+     readable; the honest description of the trouble when it is not. */
   function storedNow() {
-    var raw = null, parsed = null;
+    var raw = null;
     try { raw = localStorage.getItem(LIB_KEY); }
     catch (e) {
-      return "Stored now: cannot read localStorage in this browser (" +
+      return "Cannot read localStorage in this browser (" +
              ((e && e.name) || "error") + ").";
     }
-    if (raw === null) return "Stored now: no \u201ctravel_library\u201d entry yet.";
-    try { parsed = JSON.parse(raw); }
+    if (raw === null) return "";
+    try { JSON.parse(raw); }
     catch (e) {
-      return "Stored now: \u201ctravel_library\u201d holds " + raw.length +
+      return "\u201ctravel_library\u201d holds " + raw.length +
              " characters that will not parse \u2014 nothing was overwritten.";
     }
-    function n(k) { return parsed && Array.isArray(parsed[k]) ? parsed[k].length : 0; }
-    return "Stored now: " + n("restaurants") + " restaurants, " + n("hotels") +
-           " hotels, " + n("sights") + " sights, " + n("itineraries") + " itineraries.";
+    return "";
   }
   function saveLib(lib) {
     try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); return true; }
@@ -1436,7 +1410,8 @@
       '<button class="btn-solid btn-inline" type="button" data-lib="save">Save</button>' +
       '<button class="btn" type="button" data-lib="cancel">Cancel</button></div>' +
       '<p class="lib-msg" id="lib-form-msg" hidden></p>' +
-      '<p class="stored-now">' + esc(storedNow()) + "</p></form>";
+      (storedNow() ? '<p class="stored-now">' + esc(storedNow()) + "</p>" : "") +
+      "</form>";
     return h;
   }
 
@@ -1485,7 +1460,9 @@
     });
     $("lib-list").innerHTML = html;
     bindLibControls();
-    $("lib-stored").textContent = storedNow();
+    var libTrouble = storedNow();
+    $("lib-stored").textContent = libTrouble;
+    $("lib-stored").hidden = !libTrouble;
     /* an open publish panel must never show a library that has moved on */
     if (!$("pub-panel").hidden) fillPublish();
     try { $("lib-export").value = JSON.stringify(lib, null, 2); }
@@ -1691,48 +1668,6 @@
            plus(city ? n + " " + city : n);
   }
 
-  /* TEMPORARY merge diagnostic, shown at the foot of the trip screen.
-     To remove it later: delete this function, the #r-merge element, the
-     .mergedbg rules, and the two lines that fill it in render(). */
-  function mergeReportHtml() {
-    var d = lastMerge;
-    if (!d) return "";
-    var h = '<p class="mergedbg-title">Merge debug (temporary)</p>';
-
-    h += '<p class="mergedbg-row">destination used: "' + esc(d.plainDest) + '"</p>';
-    h += '<p class="mergedbg-row">&nbsp;&nbsp;from the model: "' + esc(d.destModel) +
-         '" &middot; you typed: "' + esc(d.destTyped) + '"</p>';
-    h += '<p class="mergedbg-row">compared against (folded): "' + esc(d.hay) + '"</p>';
-    if (d.unreadable) {
-      h += '<p class="mergedbg-row mergedbg-bad">library could NOT be read: ' +
-           esc(d.unreadable) + "</p>";
-    }
-
-    var loaded = LIB_TYPES.map(function (t) {
-      return t + " " + d.sections[t].loaded;
-    }).join(" \u00b7 ");
-    h += '<p class="mergedbg-row">library loaded from "travel_library": ' + esc(loaded) + "</p>";
-
-    LIB_TYPES.forEach(function (type) {
-      var sec = d.sections[type];
-      h += '<p class="mergedbg-row mergedbg-head">' + esc(LIB_TITLE[type]) +
-           " (" + sec.loaded + " saved)</p>";
-      if (!sec.rows.length) {
-        h += '<p class="mergedbg-row mergedbg-item">(none saved)</p>';
-        return;
-      }
-      sec.rows.forEach(function (r) {
-        h += '<p class="mergedbg-row mergedbg-item ' +
-             (r.matched ? "mergedbg-good" : "mergedbg-bad") + '">' +
-             (r.matched ? "\u2713 included" : "\u2717 skipped") +
-             " \u2014 " + esc(r.name || "(no name)") +
-             " \u2014 city: " + (r.city ? '"' + esc(r.city) + '"' : "(empty)") +
-             " \u2014 " + esc(r.why) + "</p>";
-      });
-    });
-    return h;
-  }
-
   function mergeLibrary(trip) {
     var lib = loadLib();   /* read fresh from storage on every render */
 
@@ -1753,24 +1688,12 @@
     });
     var plainDest = plainPieces.join(" ");
 
-    lastMerge = {
-      any: false,
-      destModel: txt(trip.destination),
-      destTyped: txt(lastDest),
-      plainDest: plainDest,
-      hay: hay,
-      unreadable: libUnreadable,
-      sections: {}
-    };
+    lastMerge = { any: false };
     function forCity(type) {
-      var hits = [], rows = [];
+      var hits = [];
       lib[type].forEach(function (it) {
-        var check = cityCheck(it.city, hay, plainDest);
-        rows.push({ name: txt(it.name), city: txt(it.city),
-                    matched: check.matched, why: check.why });
-        if (check.matched) hits.push(it);
+        if (cityCheck(it.city, hay, plainDest).matched) hits.push(it);
       });
-      lastMerge.sections[type] = { loaded: lib[type].length, rows: rows };
       if (hits.length) lastMerge.any = true;
       return hits;
     }
@@ -1898,9 +1821,11 @@
     }
     $("fav-list").innerHTML = html;
     bindFavControls();
-    $("fav-stored").textContent = favUnreadable
-      ? "Stored now: " + favUnreadable + " \u2014 nothing was overwritten."
-      : storedLine(false);
+    var trouble = favUnreadable
+      ? favUnreadable + " \u2014 nothing was overwritten."
+      : storageTrouble();
+    $("fav-stored").textContent = trouble;
+    $("fav-stored").hidden = !trouble;
   }
 
   /* Same rule as everywhere else here: a handler per button, set on the
@@ -1912,7 +1837,7 @@
         if (btn.getAttribute("data-fav") === "unfav") {
           removeFavoriteByKey(btn.getAttribute("data-key"));
           renderFavorites();
-          toast(storedLine(false));
+          toast(storageTrouble() || "Saved \u2713");
         }
         return false;
       };
@@ -1991,7 +1916,7 @@
       localStorage.removeItem(FB_KEY);
     } catch (e) {}
     renderFavorites();
-    toast(storedLine(false));
+    toast(storageTrouble() || "Cleared \u2713");
   });
   $("r-lib").addEventListener("click", function () { openLibrary("result"); });
   $("r-new").addEventListener("click", function () { show("main"); });
