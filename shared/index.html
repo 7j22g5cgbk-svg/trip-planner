@@ -176,6 +176,13 @@
     border-top:1px solid var(--line);
     color:var(--muted);font-size:12.5px;
   }
+  footer p{margin:0}
+  .loaded{
+    margin:12px 0 0;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--muted);
+    word-break:break-word;
+  }
 </style>
 </head>
 <body>
@@ -194,7 +201,10 @@
 
   <main id="content"></main>
 
-  <footer id="foot"></footer>
+  <footer>
+    <p id="foot"></p>
+    <p class="loaded" id="loaded"></p>
+  </footer>
 
 </div>
 
@@ -409,9 +419,10 @@
   }
 
   /* ---------- render ---------- */
-  var LIB = loadShared();
-  var CITIES = cityList(LIB);
+  var LIB = { hotels: [], restaurants: [], sights: [], itineraries: [], updated: "" };
+  var CITIES = [];
   var active = "";        /* "" = every city */
+  var loaded = false;     /* did data.js actually define SHARED_LIBRARY? */
 
   function render() {
     var html = "";
@@ -433,30 +444,85 @@
     if (!shown) {
       html = '<div class="state"><p class="empty">' +
         (active ? "Nothing saved in " + esc(active) + " yet."
-                : "Nothing has been published yet.") + "</p></div>";
+                : (loaded ? "Nothing has been published yet."
+                          : "The list could not be loaded — ./data.js is missing.")) +
+        "</p></div>";
     }
     $("content").innerHTML = html;
   }
 
   function buildFilter() {
-    if (CITIES.length < 2) return;          /* one city needs no dropdown */
+    /* a city that has gone away cannot stay selected */
+    var stillThere = false;
+    CITIES.forEach(function (c) {
+      if (c.toLowerCase() === active.toLowerCase()) stillThere = true;
+    });
+    if (!stillThere) active = "";
+
+    if (CITIES.length < 2) {                /* one city needs no dropdown */
+      $("filterbar").hidden = true;
+      return;
+    }
     var opts = '<option value="">All cities</option>';
     CITIES.forEach(function (c) {
       opts += '<option value="' + esc(c) + '">' + esc(c) + "</option>";
     });
     var sel = $("city");
     sel.innerHTML = opts;
+    sel.value = active;
     sel.onchange = function () { active = sel.value; render(); };
     $("filterbar").hidden = false;
   }
 
-  $("byline").textContent = "Curated by Nicole" +
-    (LIB.updated ? " · updated " + prettyDate(LIB.updated) : "");
+  /* Counted straight off the global, so this line reports what the page is
+     actually holding rather than what the renderer made of it. An old cached
+     data.js shows up here as the wrong counts, or an older published date. */
+  function loadedLine() {
+    var raw = window.SHARED_LIBRARY;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return "Loaded: nothing — ./data.js did not load.";
+    }
+    function n(k) { return Array.isArray(raw[k]) ? raw[k].length : 0; }
+    return "Loaded: " + n("restaurants") + " restaurants, " + n("hotels") +
+           " hotels, " + n("sights") + " sights, " + n("itineraries") + " itineraries" +
+           (txt(raw.updated) ? " · published " + txt(raw.updated) : "") + ".";
+  }
+
+  function boot() {
+    var raw = window.SHARED_LIBRARY;
+    loaded = !!(raw && typeof raw === "object" && !Array.isArray(raw));
+    LIB = loadShared();
+    CITIES = cityList(LIB);
+    $("byline").textContent = "Curated by Nicole" +
+      (LIB.updated ? " · updated " + prettyDate(LIB.updated) : "");
+    buildFilter();
+    render();
+    $("loaded").textContent = loadedLine();
+  }
+
+  /* The frame comes from this file, but the places come from a second file,
+     and a browser cache (or a service worker) can go on handing out an old
+     copy of that second file long after a new one is published — which looks
+     exactly like a perfectly good page with nothing in it. So: paint whatever
+     loaded, then ask once for an uncached copy and paint again if it brings
+     something newer. Offline that second request simply fails and the copy
+     we already have stands, so the page still works with no network. */
+  function revalidate() {
+    try {
+      var el = document.createElement("script");
+      el.src = "./data.js?t=" + Date.now();
+      el.async = true;
+      el.onload = function () { boot(); };
+      el.onerror = function () {};      /* offline or missing: keep what we have */
+      document.body.appendChild(el);
+    } catch (e) {}                      /* never let this break a page that rendered */
+  }
+
   $("foot").textContent =
     "A read-only list, kept by hand. Verify hours and availability before you go.";
 
-  buildFilter();
-  render();
+  boot();
+  revalidate();
 })();
 </script>
 </body>
