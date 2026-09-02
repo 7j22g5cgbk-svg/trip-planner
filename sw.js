@@ -1,6 +1,6 @@
 /* Travel — minimal app-shell service worker.
    All paths are relative so this works from a GitHub Pages subpath. */
-var CACHE = "travel-v11";
+var CACHE = "travel-v12";
 var SHELL = [
   "./",
   "./index.html",
@@ -37,6 +37,12 @@ self.addEventListener("fetch", function (e) {
   // Never touch the API — always straight to the network.
   if (url.hostname === "api.anthropic.com") return;
   if (url.origin !== self.location.origin) return;
+
+  // The shared read-only page is not part of this app shell. This worker's
+  // scope covers it, so leave it entirely alone: caching it here would serve
+  // a stale data.js, and the offline fallback below would answer a /shared/
+  // navigation with the main app.
+  if (url.pathname.indexOf("/shared/") !== -1) return;
 
   // Navigations: network-first, fall back to the cached shell when offline.
   if (req.mode === "navigate") {

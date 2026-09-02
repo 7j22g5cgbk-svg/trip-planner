@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#B0553C">
+<meta name="apple-mobile-web-app-title" content="Nicole's Places">
+<meta name="description" content="A hand-picked list of hotels, restaurants, sights and itineraries.">
+<title>Nicole's Places</title>
+<style>
+  :root{
+    --paper:#FAF7F2;
+    --surface:#FFFFFF;
+    --ink:#1F1B17;
+    --muted:#6B6259;
+    --line:#ECE5DA;
+    --accent:#B0553C;
+    --accent-tint:rgba(176,85,60,.09);
+    --accent-line:rgba(176,85,60,.42);
+    --shadow:0 1px 2px rgba(31,27,23,.04), 0 8px 24px rgba(31,27,23,.05);
+    --serif:"Iowan Old Style","Palatino","Hoefler Text",Georgia,serif;
+    --sans:"Avenir Next","Helvetica Neue",-apple-system,BlinkMacSystemFont,sans-serif;
+    --radius:14px;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:880px;margin:0 auto;
+    padding:0 20px calc(72px + env(safe-area-inset-bottom));
+  }
+  [hidden]{display:none !important}
+
+  /* ---------- hero ---------- */
+  .masthead{padding:calc(44px + env(safe-area-inset-top)) 0 26px}
+  .eyebrow{
+    font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin:0 0 16px;
+  }
+  .destination{
+    font-family:var(--serif);
+    font-size:clamp(2.1rem,8vw,4rem);
+    line-height:1.06;font-weight:400;letter-spacing:-.015em;
+    margin:0 0 16px;
+  }
+  .summary{
+    font-family:var(--serif);font-style:italic;
+    font-size:clamp(1.02rem,4vw,1.28rem);
+    line-height:1.55;color:var(--muted);
+    max-width:60ch;margin:0;
+  }
+
+  /* ---------- city filter ---------- */
+  .filterbar{
+    display:flex;align-items:center;flex-wrap:wrap;gap:12px;
+    padding:18px 0 0;
+  }
+  .label{
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:0;
+  }
+  select{
+    font-family:var(--sans);font-size:15px;color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--line);border-radius:999px;
+    min-height:44px;padding:10px 16px;
+    box-shadow:var(--shadow);
+    -webkit-appearance:none;appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236B6259' stroke-width='1.6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 16px center;
+    padding-right:40px;
+  }
+  select:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent-line)}
+
+  /* ---------- sections ---------- */
+  section{padding:48px 0 0}
+  .sec-head{
+    display:flex;align-items:baseline;gap:14px;
+    padding-bottom:12px;margin:0 0 26px;
+    border-bottom:1px solid var(--line);
+  }
+  .sec-title{
+    font-family:var(--serif);font-size:1.6rem;font-weight:400;
+    letter-spacing:-.01em;margin:0;
+  }
+  .sec-count{
+    margin-left:auto;font-size:11.5px;color:var(--muted);
+    letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
+  }
+
+  /* ---------- city groups ---------- */
+  .city-group + .city-group{margin-top:32px}
+  .city-head{
+    font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin:0 0 14px;
+  }
+
+  /* ---------- cards ---------- */
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+  .card,.stop{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  .card{padding:22px 22px 18px;display:flex;flex-direction:column}
+  .card-name{
+    font-family:var(--serif);font-size:1.18rem;font-weight:400;
+    line-height:1.3;margin:0 0 6px;
+  }
+  .card-meta{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 12px;
+  }
+  .card-note{font-size:.94rem;color:var(--muted);margin:0 0 18px;flex:1}
+  .price{
+    display:inline-block;font-size:12px;color:var(--muted);
+    background:#F5F0E8;border-radius:999px;
+    padding:4px 12px;margin:0 0 14px;letter-spacing:.02em;
+  }
+
+  /* ---------- buttons / links ---------- */
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:var(--sans);font-size:12.5px;font-weight:500;
+    letter-spacing:.02em;text-decoration:none;
+    border-radius:999px;min-height:38px;padding:8px 17px;
+    border:1px solid var(--accent-line);
+    color:var(--accent);background:transparent;
+  }
+  .btn--sm{min-height:34px;padding:6px 14px;font-size:12px}
+  a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:999px}
+
+  /* ---------- itineraries ---------- */
+  .itin{padding:0 0 30px}
+  .itin + .itin{border-top:1px solid var(--line);padding-top:28px}
+  .day-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 18px}
+  .day-title{font-family:var(--serif);font-size:1.28rem;font-weight:400;margin:0}
+  .itin-city{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);background:var(--accent-tint);
+    border:1px solid rgba(176,85,60,.24);border-radius:999px;
+    padding:4px 10px;white-space:nowrap;
+  }
+  .stops{list-style:none;margin:0;padding:0 0 0 20px;border-left:1px solid var(--line)}
+  .stop{position:relative;margin:0 0 14px;padding:16px 17px}
+  .stop:last-child{margin-bottom:0}
+  .stop::before{
+    content:"";position:absolute;left:-24px;top:22px;
+    width:7px;height:7px;border-radius:50%;
+    background:var(--paper);border:1.5px solid var(--accent);
+  }
+  .stop-time{
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 4px;
+  }
+  .stop-name{font-family:var(--serif);font-size:1.06rem;margin:0 0 4px}
+  .stop-note{font-size:.92rem;color:var(--muted);margin:0 0 12px}
+  .stop .actions{margin-top:0}
+
+  .empty{color:var(--muted);font-style:italic;font-family:var(--serif)}
+  .state{padding:52px 0 0}
+  footer{
+    padding:44px 0 0;margin-top:36px;
+    border-top:1px solid var(--line);
+    color:var(--muted);font-size:12.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Travel Brief</p>
+    <h1 class="destination">Nicole&rsquo;s Places</h1>
+    <p class="summary" id="byline">Curated by Nicole</p>
+  </header>
+
+  <div class="filterbar" id="filterbar" hidden>
+    <label class="label" for="city">City</label>
+    <select id="city"></select>
+  </div>
+
+  <main id="content"></main>
+
+  <footer id="foot"></footer>
+
+</div>
+
+<script src="./data.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* A read-only viewer. It talks to nothing: no API, no key, no storage,
+     no editing. Everything on screen comes from ./data.js, which is a
+     snapshot published by hand from the main app. */
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  var TYPES = ["hotels", "restaurants", "sights", "itineraries"];
+  var TITLE = {
+    hotels: "Hotels", restaurants: "Restaurants",
+    sights: "Sights", itineraries: "Itineraries"
+  };
+
+  /* ---------- helpers (same rules as the main app) ---------- */
+  function esc(v) {
+    if (v === null || v === undefined) return "";
+    return String(v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function txt(v) { return v === null || v === undefined ? "" : String(v).trim(); }
+  function arr(v) {
+    if (!Array.isArray(v)) return [];
+    return v.filter(function (x) { return x && typeof x === "object"; });
+  }
+  /* Only http(s), so a bad value in the snapshot can never become javascript: */
+  function url(v) {
+    var s = txt(v);
+    return /^https?:\/\//i.test(s) ? esc(s) : "";
+  }
+  function plus(s) {
+    return encodeURIComponent(txt(s).replace(/\s+/g, " ")).replace(/%20/g, "+");
+  }
+  /* href is already escaped by url()/mapsFor()/routeFor(). */
+  function link(href, label, small) {
+    if (!href) return "";
+    return '<a class="btn' + (small ? " btn--sm" : "") + '" href="' + href +
+           '" target="_blank" rel="noopener noreferrer">' + esc(label) + "</a>";
+  }
+  /* Always yields a map link: the published one if valid, else name + city. */
+  function mapsFor(item, city) {
+    var direct = url(item.maps);
+    if (direct) return direct;
+    var n = txt(item.name);
+    if (!n) return "";
+    var c = txt(city);
+    return esc("https://www.google.com/maps/search/?api=1&query=" +
+               plus(c ? n + " " + c : n));
+  }
+  function routeFor(it) {
+    var names = it.stops.map(function (st) { return txt(st.name); })
+                        .filter(function (n) { return n; });
+    if (!names.length) return "";
+    function q(n) { return plus(it.city ? n + " " + it.city : n); }
+    var u = "https://www.google.com/maps/dir/?api=1&destination=" + q(names[names.length - 1]);
+    if (names.length > 1) {
+      u += "&waypoints=" + names.slice(0, -1).map(q).join("|");
+    }
+    return esc(u);
+  }
+  function section(id, title, count, body) {
+    return '<section id="' + id + '"><div class="sec-head">' +
+             '<h2 class="sec-title">' + esc(title) + "</h2>" +
+             '<span class="sec-count">' + esc(count) + "</span>" +
+           "</div>" + body + "</section>";
+  }
+
+  /* ---------- the published snapshot ----------
+     Anything unexpected in data.js is dropped rather than trusted. */
+  function loadShared() {
+    var raw = window.SHARED_LIBRARY;
+    var out = { hotels: [], restaurants: [], sights: [], itineraries: [], updated: "" };
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+    out.updated = txt(raw.updated);
+    TYPES.forEach(function (type) {
+      arr(raw[type]).forEach(function (it) {
+        var item = { name: txt(it.name), city: txt(it.city) };
+        if (!item.name) return;
+        if (type === "itineraries") {
+          item.stops = arr(it.stops).map(function (st) {
+            return { time: txt(st.time), name: txt(st.name), note: txt(st.note) };
+          }).filter(function (st) { return st.name; });
+          if (!item.stops.length) return;
+        } else {
+          item.note = txt(it.note);
+          item.website = txt(it.website);
+          item.maps = txt(it.maps);
+          if (type === "hotels") item.price = txt(it.price);
+          if (type === "restaurants") item.cuisine = txt(it.cuisine);
+        }
+        out[type].push(item);
+      });
+    });
+    return out;
+  }
+
+  /* Every city that appears anywhere, in alphabetical order. */
+  function cityList(lib) {
+    var seen = {}, out = [];
+    TYPES.forEach(function (type) {
+      lib[type].forEach(function (it) {
+        var c = it.city;
+        if (!c) return;
+        var k = c.toLowerCase();
+        if (!seen[k]) { seen[k] = true; out.push(c); }
+      });
+    });
+    out.sort(function (a, b) {
+      var x = a.toLowerCase(), y = b.toLowerCase();
+      return x < y ? -1 : (x > y ? 1 : 0);
+    });
+    return out;
+  }
+
+  /* "2026-09-02" -> "2 September 2026", built from parts so the date can
+     never slip a day across time zones. Anything else is shown as written. */
+  function prettyDate(s) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(txt(s));
+    if (!m) return txt(s);
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (isNaN(d.getTime())) return txt(s);
+    try {
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    } catch (e) {
+      return txt(s);
+    }
+  }
+
+  /* ---------- cards ---------- */
+  function cardHtml(type, it) {
+    var meta = [it.city, type === "restaurants" ? it.cuisine : ""]
+      .filter(function (x) { return txt(x); }).join(" · ");
+    return '<article class="card">' +
+      '<h3 class="card-name">' + esc(it.name) + "</h3>" +
+      (meta ? '<p class="card-meta">' + esc(meta) + "</p>" : "") +
+      (txt(it.price) ? '<p class="price">' + esc(it.price) + "</p>" : "") +
+      (txt(it.note) ? '<p class="card-note">' + esc(it.note) + "</p>" : "") +
+      '<div class="actions">' +
+        link(url(it.website), "Website") +
+        link(mapsFor(it, it.city), "Google Maps") +
+      "</div></article>";
+  }
+
+  function itinHtml(it) {
+    var stops = it.stops.map(function (st) {
+      return '<li class="stop">' +
+        (st.time ? '<p class="stop-time">' + esc(st.time) + "</p>" : "") +
+        '<p class="stop-name">' + esc(st.name) + "</p>" +
+        (st.note ? '<p class="stop-note">' + esc(st.note) + "</p>" : "") +
+        '<div class="actions">' + link(mapsFor(st, it.city), "Map", true) + "</div>" +
+        "</li>";
+    }).join("");
+    return '<article class="itin"><div class="day-head">' +
+      '<h3 class="day-title">' + esc(it.name) + "</h3>" +
+      (it.city ? '<span class="itin-city">' + esc(it.city) + "</span>" : "") +
+      link(routeFor(it), "Open route in Google Maps", true) +
+      "</div><ul class=\"stops\">" + stops + "</ul></article>";
+  }
+
+  /* Items in city order, with a heading per city once there is more than
+     one to tell apart. Items saved without a city come last. */
+  function groupsFor(items, cities) {
+    var groups = [], index = {};
+    cities.forEach(function (c) {
+      var g = { city: c, items: [] };
+      index[c.toLowerCase()] = g;
+      groups.push(g);
+    });
+    var loose = { city: "", items: [] };
+    items.forEach(function (it) {
+      var g = it.city ? index[it.city.toLowerCase()] : null;
+      (g || loose).items.push(it);
+    });
+    if (loose.items.length) groups.push(loose);
+    return groups.filter(function (g) { return g.items.length; });
+  }
+
+  function bodyFor(type, items, cities, showHeads) {
+    if (type === "itineraries") {
+      if (!showHeads) return items.map(itinHtml).join("");
+      return groupsFor(items, cities).map(function (g) {
+        return '<div class="city-group">' +
+          '<p class="city-head">' + esc(g.city || "Elsewhere") + "</p>" +
+          g.items.map(itinHtml).join("") + "</div>";
+      }).join("");
+    }
+    function grid(list) {
+      return '<div class="grid">' + list.map(function (it) {
+        return cardHtml(type, it);
+      }).join("") + "</div>";
+    }
+    if (!showHeads) return grid(items);
+    return groupsFor(items, cities).map(function (g) {
+      return '<div class="city-group">' +
+        '<p class="city-head">' + esc(g.city || "Elsewhere") + "</p>" +
+        grid(g.items) + "</div>";
+    }).join("");
+  }
+
+  function countFor(type, n) {
+    if (type === "hotels") return n + (n === 1 ? " stay" : " stays");
+    if (type === "restaurants") return n + (n === 1 ? " place" : " places");
+    if (type === "sights") return n + " to see";
+    return n + (n === 1 ? " plan" : " plans");
+  }
+
+  /* ---------- render ---------- */
+  var LIB = loadShared();
+  var CITIES = cityList(LIB);
+  var active = "";        /* "" = every city */
+
+  function render() {
+    var html = "";
+    var shown = 0;
+    /* headings only earn their place when more than one city is on screen */
+    var visibleCities = active ? [active] : CITIES;
+    var showHeads = visibleCities.length > 1;
+
+    TYPES.forEach(function (type) {
+      var items = LIB[type].filter(function (it) {
+        return !active || it.city.toLowerCase() === active.toLowerCase();
+      });
+      if (!items.length) return;
+      shown += items.length;
+      html += section("sec-" + type, TITLE[type], countFor(type, items.length),
+                      bodyFor(type, items, visibleCities, showHeads));
+    });
+
+    if (!shown) {
+      html = '<div class="state"><p class="empty">' +
+        (active ? "Nothing saved in " + esc(active) + " yet."
+                : "Nothing has been published yet.") + "</p></div>";
+    }
+    $("content").innerHTML = html;
+  }
+
+  function buildFilter() {
+    if (CITIES.length < 2) return;          /* one city needs no dropdown */
+    var opts = '<option value="">All cities</option>';
+    CITIES.forEach(function (c) {
+      opts += '<option value="' + esc(c) + '">' + esc(c) + "</option>";
+    });
+    var sel = $("city");
+    sel.innerHTML = opts;
+    sel.onchange = function () { active = sel.value; render(); };
+    $("filterbar").hidden = false;
+  }
+
+  $("byline").textContent = "Curated by Nicole" +
+    (LIB.updated ? " · updated " + prettyDate(LIB.updated) : "");
+  $("foot").textContent =
+    "A read-only list, kept by hand. Verify hours and availability before you go.";
+
+  buildFilter();
+  render();
+})();
+</script>
+</body>
+</html>

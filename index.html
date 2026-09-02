@@ -262,6 +262,21 @@
   .form-actions{margin-top:20px;align-items:center}
   .lib-hint{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:60ch}
   .lib-msg{font-size:13px;color:var(--accent);margin:12px 0 0}
+  code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.9em;
+  }
+  .pub-steps{
+    margin:0 0 20px;padding-left:22px;max-width:60ch;
+    color:var(--muted);font-size:13.5px;line-height:1.75;
+  }
+  .pub-steps li{margin:0 0 6px}
+  .pub-steps strong{color:var(--ink);font-weight:600}
+  .pub-link{
+    display:block;margin:0 0 18px;word-break:break-all;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--accent);
+  }
 
   /* ---------- buttons ---------- */
   .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
@@ -425,6 +440,34 @@
 
     <div id="lib-list"></div>
     <p class="stored-now" id="lib-stored"></p>
+
+    <section id="lib-publish">
+      <div class="sec-head">
+        <h2 class="sec-title">Publish for friends</h2>
+        <span class="sec-count">Read-only page</span>
+      </div>
+      <p class="lib-hint">A read-only copy of this library, for friends to browse. No editing, no key, nothing personal — just the places.</p>
+      <span class="pub-link">https://7j22g5cgbk-svg.github.io/trip-planner/shared/</span>
+      <div class="actions">
+        <button class="btn" type="button" id="pub-make">Publish for friends</button>
+      </div>
+
+      <div id="pub-panel" hidden>
+        <ol class="pub-steps">
+          <li><strong>Copy</strong> the text below.</li>
+          <li>In your <code>trip-planner</code> folder, open <code>shared/data.js</code>, replace everything with it, save.</li>
+          <li>In GitHub Desktop: <strong>commit</strong> + <strong>Push</strong>. Your friends&rsquo; page updates.</li>
+        </ol>
+        <label class="field">
+          <span class="label">shared/data.js</span>
+          <textarea id="pub-out" rows="9" readonly spellcheck="false"></textarea>
+        </label>
+        <div class="actions">
+          <button class="btn" type="button" id="pub-copy">Copy</button>
+        </div>
+        <p class="lib-msg" id="pub-msg" hidden></p>
+      </div>
+    </section>
 
     <section id="lib-backup">
       <div class="sec-head">
@@ -1443,6 +1486,8 @@
     $("lib-list").innerHTML = html;
     bindLibControls();
     $("lib-stored").textContent = storedNow();
+    /* an open publish panel must never show a library that has moved on */
+    if (!$("pub-panel").hidden) fillPublish();
     try { $("lib-export").value = JSON.stringify(lib, null, 2); }
     catch (e) { $("lib-export").value = ""; }
 
@@ -1765,6 +1810,49 @@
     return trip;
   }
 
+  /* ---------- publish for friends ----------
+     The page cannot write files in the repo, so publishing is copy and
+     paste: this builds the exact text of shared/data.js and the user pastes
+     it over that file, commits and pushes. Nothing is sent anywhere. */
+  function todayISO() {
+    var d = new Date();
+    function two(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate());
+  }
+
+  function publishText() {
+    var lib = loadLib();
+    if (libUnreadable) return "";       /* never publish over data we could not read */
+    var snapshot = {
+      hotels: lib.hotels,
+      restaurants: lib.restaurants,
+      sights: lib.sights,
+      itineraries: lib.itineraries,
+      updated: todayISO()
+    };
+    return "window.SHARED_LIBRARY = " + JSON.stringify(snapshot, null, 2) + ";";
+  }
+
+  function pubMsg(msg) {
+    var el = $("pub-msg");
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  function fillPublish() {
+    var text = publishText();
+    if (!text) {
+      $("pub-out").value = "";
+      $("pub-panel").hidden = true;
+      pubMsg("Nothing was published \u2014 " + libUnreadable +
+             ". Copy it out under Backup first.");
+      return false;
+    }
+    $("pub-out").value = text;
+    $("pub-panel").hidden = false;
+    return true;
+  }
+
   /* ---------- favorites view ---------- */
   var favReturn = "main";   /* which view Favorites was opened from */
 
@@ -1881,6 +1969,9 @@
     libReturn = from;
     libDraft = null;
     libBackupMsg("");
+    $("pub-panel").hidden = true;
+    $("pub-out").value = "";
+    pubMsg("");
     $("lib-import").value = "";
     $("lib-back").textContent =
       from === "result" ? "← Back to the trip" : "← Back to planner";
@@ -1915,13 +2006,11 @@
     if (e && e.preventDefault) e.preventDefault();
   });
 
-  $("lib-copy").addEventListener("click", function () {
-    var ta = $("lib-export");
-    var done = function () { libBackupMsg("Copied. Paste it somewhere safe."); };
+  /* One copy routine for both textareas: the clipboard API where it exists,
+     and the old select-and-execCommand path where it does not. */
+  function copyTextarea(ta, done, failed) {
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(ta.value).then(done, function () {
-        libBackupMsg("Could not copy — select the text and copy it by hand.");
-      });
+      navigator.clipboard.writeText(ta.value).then(done, failed);
       return;
     }
     try {
@@ -1933,8 +2022,29 @@
       done();
     } catch (err) {
       ta.setAttribute("readonly", "readonly");
-      libBackupMsg("Could not copy — select the text and copy it by hand.");
+      failed();
     }
+  }
+
+  $("lib-copy").addEventListener("click", function () {
+    copyTextarea($("lib-export"),
+      function () { libBackupMsg("Copied. Paste it somewhere safe."); },
+      function () { libBackupMsg("Could not copy — select the text and copy it by hand."); });
+  });
+
+  $("pub-make").addEventListener("click", function () {
+    pubMsg("");
+    if (fillPublish()) {
+      pubMsg("Ready \u2014 copy it, paste it over shared/data.js, then commit and push.");
+      var panel = $("pub-panel");
+      if (panel.scrollIntoView) panel.scrollIntoView({ block: "center" });
+    }
+  });
+
+  $("pub-copy").addEventListener("click", function () {
+    copyTextarea($("pub-out"),
+      function () { pubMsg("Copied. Now paste it over shared/data.js, save, commit and push."); },
+      function () { pubMsg("Could not copy \u2014 select the text and copy it by hand."); });
   });
 
   $("lib-load").addEventListener("click", function () {
