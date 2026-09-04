@@ -267,8 +267,15 @@
     border-radius:var(--radius);
     padding:11px 12px 11px 14px;margin:0 0 22px;
   }
+  .pubwarn-body{flex:1;min-width:0}
   .pubwarn-text{
-    margin:0;flex:1;font-size:12.5px;line-height:1.6;color:var(--accent);
+    margin:0;font-size:12.5px;line-height:1.6;color:var(--accent);
+  }
+  /* DEBUG: temporary, delete this rule with the .pubwarn-why elements */
+  .pubwarn-why{
+    margin:5px 0 0;font-size:11px;line-height:1.5;color:var(--muted);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    word-break:break-word;
   }
   .pubwarn-x{
     -webkit-appearance:none;appearance:none;cursor:pointer;
@@ -418,7 +425,11 @@
     </header>
 
     <div class="pubwarn" id="pubwarn-main" hidden>
-      <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+      <div class="pubwarn-body">
+        <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+        <!-- DEBUG: temporary, delete this line when the fix is confirmed -->
+        <p class="pubwarn-why" id="pubwarn-main-why" hidden></p>
+      </div>
       <button class="pubwarn-x" type="button" id="pubwarn-main-x" aria-label="Dismiss">&times;</button>
     </div>
 
@@ -444,7 +455,11 @@
     </header>
 
     <div class="pubwarn" id="pubwarn-lib" hidden>
-      <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+      <div class="pubwarn-body">
+        <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+        <!-- DEBUG: temporary, delete this line when the fix is confirmed -->
+        <p class="pubwarn-why" id="pubwarn-lib-why" hidden></p>
+      </div>
       <button class="pubwarn-x" type="button" id="pubwarn-lib-x" aria-label="Dismiss">&times;</button>
     </div>
 
@@ -1513,16 +1528,27 @@
      There is no server to ask, so the published state is simply whatever
      shared/data.js holds right now: the file friends actually see. That is
      the reference; "current" is this device's library plus its sources.
-     When the two differ, the user has changed something they have not
-     published yet and the banner says so.
 
-     Every path here fails silent. If the file cannot be read, or storage
-     cannot be read, publishedRef stays null and NO banner appears: a false
-     alarm ("publish again") is worse than no alarm at all. */
+     The comparison is SEMANTIC, not literal. Two libraries are the same
+     when they hold the same places with the same content, whatever order
+     they sit in and whatever internal ids they happen to carry. In
+     particular ids are NOT compared: they are minted locally, they differ
+     between devices, and normalizeLib mints a fresh random one for any
+     item stored without one -- so comparing them reported a change on
+     every single load. "updated" is not compared either: republishing on a
+     new day is not a change.
+
+     Every path fails silent. If the file cannot be read, or storage cannot
+     be read, publishedRef stays null and NO banner appears: a false alarm
+     ("publish again") is worse than no alarm at all. */
 
   var SRC_KEY = "travel_sources";
   var publishedRef = null;   /* canonical string of the published copy; null = unknown */
+  var publishedLib = null;   /* the published copy itself, for the debug line */
+  var publishedSources = [];
+  var publishedOn = "";      /* the "updated" stamp of the copy we compared against */
   var pubwarnOff = false;    /* dismissed, for this session only */
+  var pubwarnWhy = "";       /* DEBUG -- why we think there are changes */
 
   /* JSON with object keys in a fixed order, so two objects holding the same
      values compare equal however they were built. */
@@ -1535,8 +1561,48 @@
     }).join(",") + "}";
   }
 
-  /* Sources are compared as a sorted list of canonical strings, so neither
-     the order they were added in nor the shape of an entry matters. */
+  /* The fields that actually mean something to a reader, per type. The id
+     is deliberately absent from every one of these. */
+  var CMP_FIELDS = {
+    hotels: ["name", "city", "note", "website", "price"],
+    restaurants: ["name", "city", "cuisine", "note", "website"],
+    sights: ["name", "city", "note", "website"],
+    itineraries: ["name", "city"]
+  };
+
+  /* One item reduced to its meaning. txt() turns a missing field and an
+     empty one into the same "", so "no note" and note:"" compare equal. */
+  function cmpItem(type, raw) {
+    var rec = {};
+    CMP_FIELDS[type].forEach(function (f) { rec[f] = txt(raw && raw[f]); });
+    if (type === "itineraries") {
+      /* a stop's position is part of what an itinerary says, so stops keep
+         their order and are compared as a list, not a set */
+      rec.stops = arr(raw && raw.stops).map(function (st) {
+        return { time: txt(st.time), name: txt(st.name), note: txt(st.note) };
+      }).filter(function (st) { return st.name; });
+    }
+    return rec;
+  }
+
+  /* Sorted by name+city so the two sides line up regardless of the order
+     items were added in; the canonical string breaks ties, so the order is
+     total and identical for identical content. fold() is used for the sort
+     key only -- never for equality, or a genuine capitalisation edit would
+     go unnoticed. */
+  function cmpList(lib, type) {
+    return arr(lib && lib[type]).map(function (raw) {
+      var rec = cmpItem(type, raw);
+      var s = stable(rec);
+      return { key: fold(rec.name) + " " + fold(rec.city) + " " + s,
+               rec: rec, str: s };
+    }).sort(function (a, b) {
+      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+    });
+  }
+
+  /* Sources are compared as a sorted list of canonical strings. A missing
+     list is an empty list on either side. */
   function normalizeSources(v) {
     if (!Array.isArray(v)) return [];
     return v.map(function (s) {
@@ -1557,21 +1623,60 @@
     return normalizeSources(parsed);
   }
 
-  /* Same items, whatever order they sit in and whatever order their keys
-     were written in. "updated" is not part of this: normalizeLib drops it,
-     so re-publishing on a new day is not a change. */
   function canonicalState(lib, sources) {
     var byType = {};
     LIB_TYPES.forEach(function (type) {
-      byType[type] = arr(lib[type]).map(stable).sort();
+      byType[type] = cmpList(lib, type).map(function (e) { return e.str; });
     });
-    return stable({ lib: byType, sources: sources });
+    return stable({ lib: byType, sources: normalizeSources(sources) });
+  }
+
+  /* ---------- DEBUG (temporary: this function, the two <p class="pubwarn-why">
+     elements and the three lines marked DEBUG below can all be deleted) --
+     says WHICH type, item and field disagrees, so a false positive can be
+     read straight off the screen instead of guessed at. */
+  function diffWhy(lib, sources) {
+    var out = [];
+    LIB_TYPES.forEach(function (type) {
+      var a = cmpList(lib, type), b = cmpList(publishedLib, type);
+      var counts = " (count " + a.length + " vs " + b.length;
+      if (a.length !== b.length) { out.push(type + counts + ")"); return; }
+      for (var i = 0; i < a.length; i++) {
+        if (a[i].str === b[i].str) continue;
+        var an = a[i].rec.name;
+        if (fold(an) !== fold(b[i].rec.name)) {
+          out.push(type + counts + ", “" + an +
+                   "” is not in the published copy)");
+          return;
+        }
+        var field = "";
+        CMP_FIELDS[type].concat(type === "itineraries" ? ["stops"] : [])
+          .forEach(function (f) {
+            if (!field && stable(a[i].rec[f]) !== stable(b[i].rec[f])) field = f;
+          });
+        out.push(type + counts + ", item “" + an +
+                 "” differs on field “" + (field || "?") + "”)");
+        return;
+      }
+    });
+    var sa = normalizeSources(sources);
+    if (stable(sa) !== stable(publishedSources)) {
+      out.push("sources (count " + sa.length + " vs " + publishedSources.length + ")");
+    }
+    return out.length ? "changed: " + out.join("; ") : "changed: nothing found";
   }
 
   function pubwarnShow(on) {
     ["pubwarn-main", "pubwarn-lib"].forEach(function (id) {
       var el = $(id);
       if (el) el.hidden = !on;
+    });
+    /* DEBUG -- the same reason under both banners */
+    ["pubwarn-main-why", "pubwarn-lib-why"].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.textContent = on ? pubwarnWhy : "";
+      el.hidden = !(on && pubwarnWhy);
     });
   }
 
@@ -1584,7 +1689,18 @@
       if (libUnreadable) { pubwarnShow(false); return; }   /* nothing to compare */
       var sources = loadSources();
       if (sources === null) { pubwarnShow(false); return; }
-      pubwarnShow(canonicalState(lib, sources) !== publishedRef);
+      var changed = canonicalState(lib, sources) !== publishedRef;
+      /* DEBUG */
+      pubwarnWhy = changed
+        ? diffWhy(lib, sources) +
+          " [published copy dated " + (publishedOn || "?") + "]"
+        : "";
+      try {
+        if (window.console && console.log) {
+          console.log("[unpublished] " + (changed ? pubwarnWhy : "no changes"));
+        }
+      } catch (e) {}
+      pubwarnShow(changed);
     } catch (e) {
       try { pubwarnShow(false); } catch (err) {}
     }
@@ -1592,21 +1708,29 @@
 
   /* Read the published copy once per load, then compare. Reopening the app
      after a publish + push refetches it, finds the two sides equal again,
-     and the banner is gone on its own — nothing watches for the push. */
+     and the banner is gone on its own -- nothing watches for the push. */
   function loadPublishedRef() {
     try {
       withSharedLibrary(function (shared) {
         try {
           if (shared && typeof shared === "object" && !Array.isArray(shared)) {
-            publishedRef = canonicalState(normalizeLib(shared),
-                                          normalizeSources(shared.sources));
+            publishedLib = normalizeLib(shared);
+            publishedSources = normalizeSources(shared.sources);
+            publishedOn = txt(shared.updated);
+            publishedRef = canonicalState(publishedLib, publishedSources);
+          } else {
+            /* DEBUG */
+            try {
+              if (window.console && console.log) {
+                console.log("[unpublished] shared/data.js unreadable - no banner");
+              }
+            } catch (e2) {}
           }
         } catch (e) { publishedRef = null; }
         updateUnpublished();
       });
     } catch (e) {}
   }
-
   function blankItem(type) {
     var item = { id: "", name: "", city: "" };
     if (type === "itineraries") { item.stops = [{ time: "", name: "", note: "" }]; }
