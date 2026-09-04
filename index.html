@@ -586,6 +586,23 @@
     return encodeURIComponent(txt(s).replace(/\s+/g, " ")).replace(/%20/g, "+");
   }
 
+  /* Website fields get typed on a phone, where autocorrect likes to drop a
+     space after "https://" and a full stop at the end. Neither can occur in
+     a real URL and both break the link quietly: the space made the button
+     open nothing, the trailing dot trips the site's certificate. Clean that
+     damage as the field is read, and add the scheme when what remains is
+     plainly a domain. Anything that is not URL-shaped is left exactly as
+     typed — url() above already refuses to link it. */
+  function cleanWebsite(v) {
+    var s = txt(v).replace(/\s+/g, "").replace(/[.,;:]+$/, "");
+    if (!s) return "";
+    if (!/^[a-z][a-z0-9+.\-]*:\/\//i.test(s) &&
+        /^[a-z0-9\-]+(\.[a-z0-9\-]+)+(\/.*)?$/i.test(s)) {
+      s = "https://" + s;
+    }
+    return s;
+  }
+
   var destQ = "";
   function query(name) { return plus(destQ ? name + " " + destQ : name); }
 
@@ -1616,7 +1633,8 @@
     var form = $("lib-form");
     if (!form) return;
     Array.prototype.forEach.call(form.querySelectorAll("[data-f]"), function (el) {
-      libDraft.item[el.getAttribute("data-f")] = el.value.trim();
+      var f = el.getAttribute("data-f");
+      libDraft.item[f] = f === "website" ? cleanWebsite(el.value) : el.value.trim();
     });
     if (libDraft.type === "itineraries") {
       var stops = arr(libDraft.item.stops);
