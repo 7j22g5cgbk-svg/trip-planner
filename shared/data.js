@@ -117,5 +117,5 @@ window.SHARED_LIBRARY = {
   ],
   "sights": [],
   "itineraries": [],
-  "updated": "2026-09-04"
+  "updated": "2026-09-05"
 };
