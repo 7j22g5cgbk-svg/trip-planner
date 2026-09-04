@@ -1372,6 +1372,77 @@
     try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); return true; }
     catch (e) { return false; }
   }
+
+  /* ---------- recovery from the last published copy ----------
+     An app-data wipe empties localStorage, but shared/data.js still holds
+     whatever was published last. That file is used as a safety copy and
+     nothing more: it is read ONLY when this device has no library at all,
+     it is never merged into a library that has items, and every step is
+     wrapped so a missing, stale or broken file leaves the app exactly as it
+     would have opened without it. */
+
+  function libCount(lib) {
+    return LIB_TYPES.reduce(function (n, t) { return n + arr(lib[t]).length; }, 0);
+  }
+
+  /* true only when storage was read cleanly AND holds nothing usable.
+     A read that fails, or JSON that will not parse, answers false: those
+     are the cases where restoring could overwrite data still sitting
+     there, and the rest of this file already refuses to write over them. */
+  function libSlotIsEmpty() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(LIB_KEY); }
+    catch (e) { return false; }
+    if (raw === null || raw === "") return true;      /* missing */
+    try { parsed = JSON.parse(raw); }
+    catch (e) { return false; }
+    return libCount(normalizeLib(parsed)) === 0;      /* present but empty */
+  }
+
+  /* shared/data.js assigns a global, so it is loaded the way the browser
+     loads any script: no eval, no hand-parsing. Relative path, so this
+     works from a GitHub Pages subpath and from a file:// copy. */
+  function fetchSharedLibrary(done) {
+    var settled = false, el = null, timer = null;
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch (e) {}
+      try { done(value); } catch (e) {}
+    }
+    try {
+      el = document.createElement("script");
+      el.src = "./shared/data.js";
+      el.async = true;
+      el.onload = function () {
+        var got = null;
+        try { got = window.SHARED_LIBRARY; } catch (e) { got = null; }
+        finish(got);
+      };
+      el.onerror = function () { finish(null); };
+      timer = setTimeout(function () { finish(null); }, 8000);
+      (document.head || document.documentElement).appendChild(el);
+    } catch (e) { finish(null); }
+  }
+
+  function restoreFromPublished() {
+    try {
+      if (!libSlotIsEmpty()) return;        /* local is the source of truth */
+      fetchSharedLibrary(function (shared) {
+        try {
+          if (!shared) return;                        /* absent or blocked */
+          var incoming = normalizeLib(shared);
+          if (libCount(incoming) === 0) return;       /* the empty seed */
+          if (!libSlotIsEmpty()) return;              /* something arrived meanwhile */
+          if (!saveLib(incoming)) return;             /* private mode: say nothing */
+          libDraft = null;
+          try { if (!$("library").hidden) renderLibrary(); } catch (e) {}
+          toast("Restored your library from your last publish.");
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
   function blankItem(type) {
     var item = { id: "", name: "", city: "" };
     if (type === "itineraries") { item.stops = [{ time: "", name: "", note: "" }]; }
@@ -1996,6 +2067,9 @@
   $("again").addEventListener("click", function () { show("main"); });
 
   show(getKey() ? "main" : "setup");
+
+  /* Safety copy: only ever consulted when this device has no library. */
+  restoreFromPublished();
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
