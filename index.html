@@ -259,6 +259,24 @@
     font-size:11.5px;line-height:1.6;color:var(--accent);
   }
 
+  /* the "you have unpublished changes" nudge — quiet, and out of the way */
+  .pubwarn{
+    display:flex;gap:10px;align-items:flex-start;
+    background:var(--accent-tint);
+    border:1px solid var(--accent-line);border-left:3px solid var(--accent);
+    border-radius:var(--radius);
+    padding:11px 12px 11px 14px;margin:0 0 22px;
+  }
+  .pubwarn-text{
+    margin:0;flex:1;font-size:12.5px;line-height:1.6;color:var(--accent);
+  }
+  .pubwarn-x{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    background:transparent;border:0;padding:0 2px;margin:0;line-height:1;
+    font-family:var(--sans);font-size:18px;color:var(--accent);opacity:.6;
+  }
+  .pubwarn-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
   /* ---------- buttons ---------- */
   .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
   .btn{
@@ -398,6 +416,12 @@
       <h1 class="destination">Where to?</h1>
       <p class="summary">Boutique hotels, real places, no tourist traps. Researched live with web search.</p>
     </header>
+
+    <div class="pubwarn" id="pubwarn-main" hidden>
+      <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+      <button class="pubwarn-x" type="button" id="pubwarn-main-x" aria-label="Dismiss">&times;</button>
+    </div>
+
     <form id="trip-form">
       <label class="field">
         <span class="label">Destination</span>
@@ -418,6 +442,11 @@
       <h1 class="destination">My Library</h1>
       <p class="summary">Your own hotels, restaurants, sights and itineraries — kept on this device, and folded into any trip you plan for the same city.</p>
     </header>
+
+    <div class="pubwarn" id="pubwarn-lib" hidden>
+      <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+      <button class="pubwarn-x" type="button" id="pubwarn-lib-x" aria-label="Dismiss">&times;</button>
+    </div>
 
     <div id="lib-list"></div>
     <p class="stored-now" id="lib-stored"></p>
@@ -552,6 +581,8 @@
   function show(name) {
     views.forEach(function (v) { $(v).hidden = (v !== name); });
     window.scrollTo(0, 0);
+    /* the unpublished-changes banner lives on two screens; keep both honest */
+    try { updateUnpublished(); } catch (e) {}
   }
 
   /* ---------- key storage (localStorage only) ---------- */
@@ -1443,10 +1474,28 @@
     } catch (e) { finish(null); }
   }
 
+  /* One load of shared/data.js per session, shared by the restore path and
+     by the unpublished-changes check below, so opening the app never asks
+     for that file twice. sharedState: 0 idle, 1 loading, 2 settled. */
+  var sharedState = 0, sharedValue = null, sharedWaiting = [];
+  function withSharedLibrary(done) {
+    if (sharedState === 2) { try { done(sharedValue); } catch (e) {} return; }
+    sharedWaiting.push(done);
+    if (sharedState === 1) return;
+    sharedState = 1;
+    fetchSharedLibrary(function (value) {
+      sharedState = 2;
+      sharedValue = value;
+      var waiting = sharedWaiting;
+      sharedWaiting = [];
+      waiting.forEach(function (cb) { try { cb(value); } catch (e) {} });
+    });
+  }
+
   function restoreFromPublished() {
     try {
       if (!libSlotIsEmpty()) return;        /* local is the source of truth */
-      fetchSharedLibrary(function (shared) {
+      withSharedLibrary(function (shared) {
         try {
           if (!shared) return;                        /* absent or blocked */
           var incoming = normalizeLib(shared);
@@ -1460,6 +1509,104 @@
       });
     } catch (e) {}
   }
+  /* ---------- "you have unpublished changes" ----------
+     There is no server to ask, so the published state is simply whatever
+     shared/data.js holds right now: the file friends actually see. That is
+     the reference; "current" is this device's library plus its sources.
+     When the two differ, the user has changed something they have not
+     published yet and the banner says so.
+
+     Every path here fails silent. If the file cannot be read, or storage
+     cannot be read, publishedRef stays null and NO banner appears: a false
+     alarm ("publish again") is worse than no alarm at all. */
+
+  var SRC_KEY = "travel_sources";
+  var publishedRef = null;   /* canonical string of the published copy; null = unknown */
+  var pubwarnOff = false;    /* dismissed, for this session only */
+
+  /* JSON with object keys in a fixed order, so two objects holding the same
+     values compare equal however they were built. */
+  function stable(v) {
+    if (v === undefined) return "null";
+    if (v === null || typeof v !== "object") return JSON.stringify(v);
+    if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+    return "{" + Object.keys(v).sort().map(function (k) {
+      return JSON.stringify(k) + ":" + stable(v[k]);
+    }).join(",") + "}";
+  }
+
+  /* Sources are compared as a sorted list of canonical strings, so neither
+     the order they were added in nor the shape of an entry matters. */
+  function normalizeSources(v) {
+    if (!Array.isArray(v)) return [];
+    return v.map(function (s) {
+      if (s === null || s === undefined) return "";
+      if (typeof s === "object") return stable(s);
+      return String(s).trim();
+    }).filter(function (s) { return s; }).sort();
+  }
+
+  /* [] when there are none, null when storage would not give an answer. */
+  function loadSources() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(SRC_KEY); }
+    catch (e) { return null; }
+    if (raw === null || raw === "") return [];
+    try { parsed = JSON.parse(raw); }
+    catch (e) { return null; }
+    return normalizeSources(parsed);
+  }
+
+  /* Same items, whatever order they sit in and whatever order their keys
+     were written in. "updated" is not part of this: normalizeLib drops it,
+     so re-publishing on a new day is not a change. */
+  function canonicalState(lib, sources) {
+    var byType = {};
+    LIB_TYPES.forEach(function (type) {
+      byType[type] = arr(lib[type]).map(stable).sort();
+    });
+    return stable({ lib: byType, sources: sources });
+  }
+
+  function pubwarnShow(on) {
+    ["pubwarn-main", "pubwarn-lib"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.hidden = !on;
+    });
+  }
+
+  /* Cheap, and safe to call as often as it takes: run it after anything
+     that could change the library or the sources. */
+  function updateUnpublished() {
+    try {
+      if (pubwarnOff || publishedRef === null) { pubwarnShow(false); return; }
+      var lib = loadLib();
+      if (libUnreadable) { pubwarnShow(false); return; }   /* nothing to compare */
+      var sources = loadSources();
+      if (sources === null) { pubwarnShow(false); return; }
+      pubwarnShow(canonicalState(lib, sources) !== publishedRef);
+    } catch (e) {
+      try { pubwarnShow(false); } catch (err) {}
+    }
+  }
+
+  /* Read the published copy once per load, then compare. Reopening the app
+     after a publish + push refetches it, finds the two sides equal again,
+     and the banner is gone on its own — nothing watches for the push. */
+  function loadPublishedRef() {
+    try {
+      withSharedLibrary(function (shared) {
+        try {
+          if (shared && typeof shared === "object" && !Array.isArray(shared)) {
+            publishedRef = canonicalState(normalizeLib(shared),
+                                          normalizeSources(shared.sources));
+          }
+        } catch (e) { publishedRef = null; }
+        updateUnpublished();
+      });
+    } catch (e) {}
+  }
+
   function blankItem(type) {
     var item = { id: "", name: "", city: "" };
     if (type === "itineraries") { item.stops = [{ time: "", name: "", note: "" }]; }
@@ -1555,6 +1702,11 @@
     if (!$("pub-panel").hidden) fillPublish();
     try { $("lib-export").value = JSON.stringify(lib, null, 2); }
     catch (e) { $("lib-export").value = ""; }
+
+    /* every add, edit, delete and import lands here, so this is the one
+       place the banner has to be recomputed from. Anything that changes
+       the sources list must call updateUnpublished() too. */
+    updateUnpublished();
 
     /* A form opened from a section further down would otherwise be off-screen. */
     if (libScroll) {
@@ -2086,8 +2238,20 @@
 
   show(getKey() ? "main" : "setup");
 
+  ["pubwarn-main-x", "pubwarn-lib-x"].forEach(function (id) {
+    var btn = $(id);
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      pubwarnOff = true;          /* this session only; back on next load */
+      pubwarnShow(false);
+    });
+  });
+
   /* Safety copy: only ever consulted when this device has no library. */
   restoreFromPublished();
+
+  /* Same file, read once: the reference the banner compares against. */
+  loadPublishedRef();
 
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", function () {
