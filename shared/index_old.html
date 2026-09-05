@@ -340,11 +340,7 @@
       (txt(it.price) ? '<p class="price">' + esc(it.price) + "</p>" : "") +
       (txt(it.note) ? '<p class="card-note">' + esc(it.note) + "</p>" : "") +
       '<div class="actions">' +
-        (url(it.website)
-          ? link(url(it.website), "Website")
-          : link(esc("https://www.google.com/search?q=" +
-                     plus((txt(it.city) ? txt(it.name) + " " + txt(it.city) : txt(it.name)) +
-                          " official website")), "Find website")) +
+        link(url(it.website), "Website") +
         link(mapsFor(it, it.city), "Google Maps") +
       "</div></article>";
   }

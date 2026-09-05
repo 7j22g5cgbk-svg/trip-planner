@@ -701,22 +701,9 @@
     return '<a class="btn' + (small ? " btn--sm" : "") + '" href="' + href +
            '" target="_blank" rel="noopener noreferrer">' + esc(label) + "</a>";
   }
-  /* When a place has no verified website, fall back to a Google search for
-     its official site. Free, and works for places saved before websites
-     were captured. */
-  function siteSearch(item) {
-    var n = txt(item.name);
-    if (!n) return "";
-    var c = txt(item.city);
-    return esc("https://www.google.com/search?q=" +
-               plus((c ? n + " " + c : n) + " official website"));
-  }
   function actions(item, small) {
-    var direct = url(item.website);
-    var siteBtn = direct
-      ? link(direct, "Website", small)
-      : link(siteSearch(item), small ? "Site" : "Find website", small);
-    return siteBtn + link(mapsFor(item), small ? "Map" : "Google Maps", small);
+    return link(url(item.website), "Website", small) +
+           link(mapsFor(item), small ? "Map" : "Google Maps", small);
   }
   function section(id, title, count, body) {
     return '<section id="' + id + '"><div class="sec-head">' +
