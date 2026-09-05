@@ -1368,11 +1368,6 @@
       }
       var raw = parts.join("\n").trim();
 
-      /* Strip web-search citation tags (<cite ...>...</cite>). They leak into
-         the trip text and their quotes can even break the JSON, so remove them
-         before anything else reads the response. */
-      raw = raw.replace(/<\/?cite\b[^>]*>/gi, "");
-
       /* stop_reason "max_tokens" means the answer was cut off mid-JSON. */
       var truncated = (data.stop_reason === "max_tokens");
       function tooLong(rawText) {
