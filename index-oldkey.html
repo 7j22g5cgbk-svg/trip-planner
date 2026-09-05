@@ -401,17 +401,17 @@
     <header class="masthead">
       <p class="eyebrow">Travel Brief</p>
       <h1 class="destination">Set up</h1>
-      <p class="summary">Enter the shared access password once. It is stored only in this browser.</p>
+      <p class="summary">Paste your Anthropic API key once. It is stored only in this browser and sent only to api.anthropic.com.</p>
     </header>
     <form id="setup-form">
       <label class="field">
-        <span class="label">Access password</span>
-        <input type="password" id="key-input" placeholder="password"
+        <span class="label">Anthropic API key</span>
+        <input type="password" id="key-input" placeholder="sk-ant-…"
                autocomplete="off" autocapitalize="off" autocorrect="off"
                spellcheck="false" enterkeyhint="done">
       </label>
-      <button class="btn-solid" type="submit">Save password</button>
-      <p class="hint">Stored in this browser only. Clearing Safari's website data removes it and you'll re-enter the password.</p>
+      <button class="btn-solid" type="submit">Save key</button>
+      <p class="hint">Stored with <code>localStorage</code> under <code>anthropic_key</code>. Clearing Safari's website data removes it. Anyone with access to this device's browser can use it, so use a key you are willing to rotate.</p>
       <p id="setup-err" class="hint" style="color:var(--accent)" hidden></p>
     </form>
   </div>
@@ -443,7 +443,7 @@
     </form>
     <button class="btn btn-block" type="button" id="open-lib">My Library</button>
     <button class="btn btn-block" type="button" id="open-fav">Favorites</button>
-    <button class="linkish" type="button" id="change-key">Change or clear password</button>
+    <button class="linkish" type="button" id="change-key">Change or clear API key</button>
   </div>
 
   <!-- ============ my library (on-device) ============ -->
@@ -588,7 +588,7 @@
   "use strict";
 
   /* The only endpoint this page ever talks to. */
-  var API_URL = "https://trip-backend.fhy5byhvk9.workers.dev";
+  var API_URL = "https://api.anthropic.com/v1/messages";
   var STORE_KEY = "anthropic_key";
 
   var $ = function (id) { return document.getElementById(id); };
@@ -1250,8 +1250,10 @@
     fetch(API_URL, {
       method: "POST",
       headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
         "content-type": "application/json",
-        "x-trip-password": key
+        "anthropic-dangerous-direct-browser-access": "true"
       },
       body: JSON.stringify(body)
     }).then(function (res) {
@@ -1265,9 +1267,9 @@
       if (!r.ok) {
         var apiMsg = (data && data.error && data.error.message) || r.text || "";
         if (r.status === 401 || r.status === 403) {
-          fail("Check your password",
-               "The server rejected the password (HTTP " + r.status + "). " +
-               "Use “Change or clear password” to enter it again.", apiMsg);
+          fail("Check your API key",
+               "The API rejected the key (HTTP " + r.status + "). " +
+               "Use “Change or clear API key” to enter a different one.", apiMsg);
         } else if (r.status === 429) {
           fail("Rate limited", apiMsg || "Too many requests. Wait a moment and try again.", r.text);
         } else if (r.status === 400 && /credit|balance|quota/i.test(apiMsg)) {
@@ -2226,7 +2228,7 @@
       return;
     }
     if (!setKey(v)) {
-      errEl.textContent = "This browser refused to store the password (private mode?).";
+      errEl.textContent = "This browser refused to store the key (private mode?).";
       errEl.hidden = false;
       return;
     }
