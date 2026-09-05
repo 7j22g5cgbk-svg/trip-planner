@@ -5,10 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="./manifest.webmanifest">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<meta name="theme-color" content="#0E3B3A">
+<meta name="theme-color" content="#B0553C">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Travel">
@@ -16,20 +13,19 @@
 <title>Travel — Claude</title>
 <style>
   :root{
-    --paper:#ECEEED;
+    --paper:#FAF7F2;
     --surface:#FFFFFF;
-    --ink:#141719;
-    --muted:#5C616B;
-    --line:#E8E8E3;
-    --accent:#0E3B3A;
-    --accent-tint:rgba(14,59,58,.08);
-    --accent-line:rgba(14,59,58,.40);
+    --ink:#1F1B17;
+    --muted:#6B6259;
+    --line:#ECE5DA;
+    --accent:#B0553C;
+    --accent-tint:rgba(176,85,60,.09);
+    --accent-line:rgba(176,85,60,.42);
     --shadow:0 1px 2px rgba(31,27,23,.04), 0 8px 24px rgba(31,27,23,.05);
     --shadow-lift:0 2px 6px rgba(31,27,23,.06), 0 18px 42px rgba(31,27,23,.10);
-    --serif:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
-    --sans:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    --serif:"Iowan Old Style","Palatino","Hoefler Text",Georgia,serif;
+    --sans:"Avenir Next","Helvetica Neue",-apple-system,BlinkMacSystemFont,sans-serif;
     --radius:14px;
-    --deep:#0E3B3A;--deep-2:#12554E;--deep-3:#0A2A2C;
   }
 
   *,*::before,*::after{box-sizing:border-box}
@@ -187,7 +183,7 @@
     display:flex;align-items:center;gap:10px;
     margin:0 -20px;
     padding:calc(10px + env(safe-area-inset-top)) 20px 10px;
-    background:rgba(236,238,237,.94);
+    background:rgba(250,247,242,.94);
     -webkit-backdrop-filter:saturate(180%) blur(12px);
     backdrop-filter:saturate(180%) blur(12px);
     border-bottom:1px solid var(--line);
@@ -395,36 +391,6 @@
     border-top:1px solid var(--line);
     color:var(--muted);font-size:12.5px;
   }
-
-  /* ===== applied design (green + panels) ===== */
-  .destination{font-weight:800;letter-spacing:-.03em}
-  .summary{font-style:normal;font-weight:400}
-  .sec-title{font-weight:700}
-  .card-name{font-weight:700}
-  .day-title{font-weight:700}
-  .stop-name{font-weight:600}
-  .state-title,.err-title{font-weight:700}
-  .price{background:rgba(14,59,58,.07)}
-  .tag{border-color:var(--accent-line)}
-  /* card gets an image-style panel on top */
-  .card{padding:0;overflow:hidden}
-  .card-stub{padding:14px 18px}
-  .card-body{padding:20px;display:flex;flex-direction:column;flex:1}
-  .thumb{height:150px;position:relative;overflow:hidden}
-  .art{position:relative;overflow:hidden;background:
-      radial-gradient(90% 120% at 22% 18%, var(--deep-2) 0%, transparent 60%),
-      radial-gradient(100% 120% at 85% 88%, var(--deep-3) 0%, transparent 55%),
-      linear-gradient(158deg, var(--deep) 0%, var(--deep-3) 100%);}
-  .art::before{content:"";position:absolute;inset:-25%;z-index:0;
-      background:repeating-radial-gradient(circle at 72% 28%, transparent 0 16px, rgba(255,255,255,.07) 16px 17px);
-      -webkit-mask-image:radial-gradient(circle at 50% 52%, transparent 0 42%, #000 74%);
-      mask-image:radial-gradient(circle at 50% 52%, transparent 0 42%, #000 74%)}
-  .art::after{content:"";position:absolute;inset:0;z-index:0;
-      background:radial-gradient(60% 80% at 78% 22%, rgba(183,145,84,.22) 0%, transparent 60%)}
-  .thumb .motif{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86px;opacity:.85;z-index:2;pointer-events:none}
-  .thumb .motif svg{display:block;width:100%;height:auto;fill:#fff}
-  .day-motif{display:inline-flex;vertical-align:middle;margin-right:2px}
-  .day-motif svg{width:20px;height:20px;fill:var(--accent);opacity:.9}
 </style>
 </head>
 <body>
@@ -1012,10 +978,6 @@
     return cardHtml(id);
   }
 
-
-  var MOTIF={hotel:'<path d="M216,76H28V48a4,4,0,0,0-8,0V208a4,4,0,0,0,8,0V172H244v36a4,4,0,0,0,8,0V112A36,36,0,0,0,216,76ZM28,84h80v80H28Zm88,80V84H216a28,28,0,0,1,28,28v52Z"/>',restaurant:'<path d="M76,88V40a4,4,0,0,1,8,0V88a4,4,0,0,1-8,0ZM212,40V224a4,4,0,0,1-8,0V172H152a4,4,0,0,1-4-4,264.27,264.27,0,0,1,7.11-55.94c9.47-39.22,27.21-65.41,51.31-75.74A4,4,0,0,1,212,40Zm-8,6.46C162.25,70.33,156.81,145.75,156.1,164H204Zm-88-7.12a4,4,0,0,0-7.9,1.32l8,47.66a36,36,0,0,1-72,0l8-47.66a4,4,0,0,0-7.9-1.32l-8,48A4.89,4.89,0,0,0,36,88a44.06,44.06,0,0,0,40,43.81V224a4,4,0,0,0,8,0V131.81A44.06,44.06,0,0,0,124,88a4.89,4.89,0,0,0,0-.66Z"/>',sight:'<path d="M24,100H52v72H32a4,4,0,0,0,0,8H224a4,4,0,0,0,0-8H204V100h28a4,4,0,0,0,2.1-7.41l-104-64a4,4,0,0,0-4.2,0l-104,64A4,4,0,0,0,24,100Zm36,0h40v72H60Zm88,0v72H108V100Zm48,72H156V100h40ZM128,36.7,217.87,92H38.13ZM244,208a4,4,0,0,1-4,4H16a4,4,0,0,1,0-8H240A4,4,0,0,1,244,208Z"/>'};
-  function motifFor(t){var ic=MOTIF[t]||MOTIF.sight;return '<div class="thumb art"><div class="motif"><svg viewBox="0 0 256 256">'+ic+'</svg></div></div>';}
-  var MAPMOTIF='<path d="M226.46,52.85a4,4,0,0,0-3.43-.73L160.47,67.76,97.79,36.42a4,4,0,0,0-2.76-.3l-64,16A4,4,0,0,0,28,56V200a4,4,0,0,0,5,3.88l62.56-15.64,62.68,31.34a4,4,0,0,0,2.76.3l64-16a4,4,0,0,0,3-3.88V56A4,4,0,0,0,226.46,52.85ZM100,46.47l56,28V209.53l-56-28ZM36,59.12l56-14V180.88l-56,14ZM220,196.88l-56,14V75.12l56-14Z"/>';
   function cardHtml(id) {
     var c = cardReg[id];
     if (!c) return "";
@@ -1030,7 +992,6 @@
         "</article>";
     }
     return '<article class="card" id="' + id + '">' +
-      motifFor(p.type) + '<div class="card-body">' +
       (c.saved ? '<div><span class="tag">\u2605 my saved place</span></div>' : "") +
       '<h3 class="card-name">' + esc(p.name) + "</h3>" +
       c.metaHtml +
@@ -1047,7 +1008,7 @@
           'aria-label="Bad recommendation" aria-pressed="' + (vote === "down" ? "true" : "false") +
           '">\ud83d\udc4e</button>' +
       "</div>" +
-      '<div class="actions">' + actions(c.item) + "</div></div></article>";
+      '<div class="actions">' + actions(c.item) + "</div></article>";
   }
 
   function bindCard(id) {
@@ -1129,7 +1090,6 @@
               (acts ? '<div class="actions">' + acts + "</div>" : "") + "</li>";
           }).join("");
           return '<div class="day"><div class="day-head">' +
-            '<span class="day-motif"><svg viewBox="0 0 256 256">' + MAPMOTIF + '</svg></span>' +
             '<h3 class="day-title">Day ' + esc(d.day) + "</h3>" +
             link(routeFor(d), "Open route in Google Maps", true) + "</div>" +
             (stops ? '<ul class="stops">' + stops + "</ul>"
@@ -2454,7 +2414,11 @@
   /* Same file, read once: the reference the banner compares against. */
   loadPublishedRef();
 
-  /* service worker disabled in this restyled TEST copy */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js");
+    });
+  }
 })();
 </script>
 </body>
