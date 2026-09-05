@@ -819,45 +819,19 @@
     if (vote !== "up" && vote !== "down") return false;
     var fb = loadFeedback();
     if (fbUnreadable) return false;
-    var k = fbKey(type, city, name);
-    var prev = (fb[k] && (fb[k].vote === "up" || fb[k].vote === "down")) ? fb[k].vote : "";
-    fb[k] = {
+    fb[fbKey(type, city, name)] = {
       type: txt(type), name: txt(name), city: txt(city),
       vote: vote, ts: stamp()
     };
-    var ok = writeJson(FB_KEY, fb);
-    if (ok) sendVoteBeacon(type, name, city, vote, prev);
-    return ok;
+    return writeJson(FB_KEY, fb);
   }
   function clearVote(type, name, city) {
     var fb = loadFeedback();
     if (fbUnreadable) return false;
     var k = fbKey(type, city, name);
     if (!fb.hasOwnProperty(k)) return true;
-    var prev = (fb[k] && (fb[k].vote === "up" || fb[k].vote === "down")) ? fb[k].vote : "";
     delete fb[k];
-    var ok = writeJson(FB_KEY, fb);
-    if (ok && prev) sendVoteBeacon(type, name, city, "none", prev);
-    return ok;
-  }
-
-  /* Quietly report a vote to the backend for combined totals.
-     Fire-and-forget: any failure is ignored and never affects the app. */
-  function sendVoteBeacon(type, name, city, vote, prev) {
-    try {
-      var pw = getKey();
-      if (!pw) return;
-      fetch(API_URL + "/vote", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-trip-password": pw },
-        body: JSON.stringify({
-          id: fbKey(type, city, name),
-          vote: vote, prev: prev || "",
-          type: txt(type), name: txt(name), city: txt(city)
-        }),
-        keepalive: true
-      }).catch(function () {});
-    } catch (e) {}
+    return writeJson(FB_KEY, fb);
   }
 
   function isFavorite(type, name, city) {
