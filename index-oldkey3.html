@@ -1268,8 +1268,8 @@
 
     var body = {
       model: "claude-sonnet-5",
-      max_tokens: 12000,
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      max_tokens: 24000,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 6 }],
       messages: [{ role: "user", content: buildPrompt(dest) }]
     };
 
