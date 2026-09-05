@@ -1,0 +1,2461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0E3B3A">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Travel">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<title>Travel — Claude</title>
+<style>
+  :root{
+    --paper:#FCFCFB;
+    --surface:#FFFFFF;
+    --ink:#141719;
+    --muted:#5C616B;
+    --line:#E8E8E3;
+    --accent:#0E3B3A;
+    --accent-tint:rgba(14,59,58,.08);
+    --accent-line:rgba(14,59,58,.40);
+    --shadow:0 1px 2px rgba(31,27,23,.04), 0 8px 24px rgba(31,27,23,.05);
+    --shadow-lift:0 2px 6px rgba(31,27,23,.06), 0 18px 42px rgba(31,27,23,.10);
+    --serif:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    --sans:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif;
+    --radius:14px;
+    --deep:#0E3B3A;--deep-2:#12554E;--deep-3:#0A2A2C;
+  }
+
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{
+    max-width:880px;margin:0 auto;
+    padding:0 20px calc(72px + env(safe-area-inset-bottom));
+  }
+  [hidden]{display:none !important}
+
+  /* ---------- hero ---------- */
+  .masthead{padding:calc(44px + env(safe-area-inset-top)) 0 26px}
+  .eyebrow{
+    font-size:11px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--accent);font-weight:600;margin:0 0 16px;
+  }
+  .destination{
+    font-family:var(--serif);
+    font-size:clamp(2.1rem,8vw,4rem);
+    line-height:1.06;font-weight:400;letter-spacing:-.015em;
+    margin:0 0 16px;
+  }
+  .summary{
+    font-family:var(--serif);font-style:italic;
+    font-size:clamp(1.02rem,4vw,1.28rem);
+    line-height:1.55;color:var(--muted);
+    max-width:60ch;margin:0;
+  }
+
+  /* ---------- form ---------- */
+  .field{display:block;margin:0 0 14px}
+  .label{
+    display:block;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 8px;
+  }
+  input[type=text],input[type=password]{
+    width:100%;font-family:var(--sans);
+    font-size:16px; /* 16px keeps iOS Safari from zooming on focus */
+    color:var(--ink);background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:14px 16px;min-height:50px;
+    box-shadow:var(--shadow);
+    -webkit-appearance:none;appearance:none;
+  }
+  input:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent-line)}
+  .btn-solid{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:100%;font-family:var(--sans);font-size:15px;font-weight:600;
+    letter-spacing:.02em;cursor:pointer;
+    background:var(--accent);color:#fff;
+    border:1px solid var(--accent);border-radius:999px;
+    min-height:52px;padding:14px 24px;
+    -webkit-appearance:none;appearance:none;
+  }
+  .btn-solid:disabled{opacity:.45;cursor:default}
+  .linkish{
+    display:inline-block;background:none;border:0;padding:0;margin:18px 0 0;
+    font-family:var(--sans);font-size:13px;color:var(--muted);
+    text-decoration:underline;cursor:pointer;
+  }
+  .linkish:hover{color:var(--accent)}
+  .hint{font-size:13px;color:var(--muted);margin:10px 0 0;max-width:56ch}
+
+  /* ---------- states ---------- */
+  .state{padding:52px 0 0}
+  .spinner{
+    width:26px;height:26px;border-radius:50%;
+    border:2px solid var(--line);border-top-color:var(--accent);
+    animation:spin .9s linear infinite;margin:0 0 18px;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spinner{animation-duration:2.4s}}
+  .state-title{font-family:var(--serif);font-size:1.35rem;font-weight:400;margin:0 0 8px}
+  .state-note{color:var(--muted);font-size:.94rem;margin:0}
+  .err{
+    background:var(--surface);border:1px solid var(--line);
+    border-left:3px solid var(--accent);
+    border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);
+  }
+  .err-title{font-family:var(--serif);font-size:1.25rem;font-weight:400;margin:0 0 8px}
+  .err-msg{color:var(--muted);font-size:.94rem;margin:0 0 4px}
+  details{margin:16px 0 0}
+  summary{
+    cursor:pointer;font-size:12px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);
+  }
+  pre.raw{
+    white-space:pre-wrap;word-break:break-word;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--muted);
+    background:var(--paper);border:1px solid var(--line);
+    border-radius:10px;padding:14px;margin:12px 0 0;
+    max-height:340px;overflow:auto;
+  }
+
+  /* ---------- sections ---------- */
+  section{padding:48px 0 0}
+  .sec-head{
+    display:flex;align-items:baseline;gap:14px;
+    padding-bottom:12px;margin:0 0 26px;
+    border-bottom:1px solid var(--line);
+  }
+  .sec-title{
+    font-family:var(--serif);font-size:1.6rem;font-weight:400;
+    letter-spacing:-.01em;margin:0;
+  }
+  .sec-count{
+    margin-left:auto;font-size:11.5px;color:var(--muted);
+    letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;
+  }
+
+  /* ---------- cards ---------- */
+  .grid{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+  .card,.stop{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  .card{padding:22px 22px 18px;display:flex;flex-direction:column}
+  .card-name{
+    font-family:var(--serif);font-size:1.18rem;font-weight:400;
+    line-height:1.3;margin:0 0 6px;
+  }
+  .card-meta{
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 12px;
+  }
+  .card-note{font-size:.94rem;color:var(--muted);margin:0 0 18px;flex:1}
+  .price{
+    display:inline-block;font-size:12px;color:var(--muted);
+    background:#F5F0E8;border-radius:999px;
+    padding:4px 12px;margin:0 0 14px;letter-spacing:.02em;
+  }
+  .tag{
+    display:inline-block;font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);
+    background:var(--accent-tint);
+    border:1px solid rgba(176,85,60,.24);border-radius:999px;
+    padding:4px 10px;margin:0 0 12px;white-space:nowrap;
+  }
+
+  /* ---------- sticky bar on the brief ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:10px;
+    margin:0 -20px;
+    padding:calc(10px + env(safe-area-inset-top)) 20px 10px;
+    background:rgba(250,247,242,.94);
+    -webkit-backdrop-filter:saturate(180%) blur(12px);
+    backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar .push{margin-left:auto}
+  .topbtn{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    font-family:var(--sans);font-size:13px;font-weight:500;letter-spacing:.01em;
+    color:var(--accent);background:transparent;
+    border:1px solid var(--accent-line);border-radius:999px;
+    min-height:40px;padding:8px 16px;white-space:nowrap;
+  }
+  .topbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .topbar + .masthead{padding-top:28px}
+
+  /* ---------- storage trouble, when there is any ---------- */
+  .stored-now{
+    margin:20px 0 0;padding:10px 14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--muted);
+    background:var(--surface);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;word-break:break-word;
+  }
+  .lib-form .stored-now{margin:16px 0 0}
+
+  /* ---------- "your saved places are in here" ---------- */
+  .saved-note{
+    margin:18px 0 0;
+    font-family:var(--sans);font-size:12.5px;color:var(--accent);
+  }
+
+  /* ---------- library ---------- */
+  textarea{
+    width:100%;font-family:var(--sans);
+    font-size:16px;line-height:1.5;color:var(--ink);
+    background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:12px 16px;min-height:76px;resize:vertical;
+    box-shadow:var(--shadow);
+    -webkit-appearance:none;appearance:none;
+  }
+  textarea:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent-line)}
+  textarea[readonly]{background:var(--paper);color:var(--muted)}
+  .lib-form{
+    background:var(--surface);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:20px 20px 18px;margin:0 0 22px;
+  }
+  .lib-form .label{margin-top:2px}
+  .stoprow{
+    display:grid;gap:8px;margin:0 0 10px;align-items:center;
+    grid-template-columns:104px 1fr 1fr auto;
+  }
+  @media (max-width:620px){.stoprow{grid-template-columns:1fr}}
+  .form-actions{margin-top:20px;align-items:center}
+  .lib-hint{color:var(--muted);font-size:13px;margin:0 0 18px;max-width:60ch}
+  .lib-msg{font-size:13px;color:var(--accent);margin:12px 0 0}
+  code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.9em;
+  }
+  .pub-steps{
+    margin:0 0 20px;padding-left:22px;max-width:60ch;
+    color:var(--muted);font-size:13.5px;line-height:1.75;
+  }
+  .pub-steps li{margin:0 0 6px}
+  .pub-steps strong{color:var(--ink);font-weight:600}
+  .pub-link{
+    display:block;margin:0 0 18px;word-break:break-all;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.6;color:var(--accent);
+  }
+
+  /* the "you have unpublished changes" nudge — quiet, and out of the way */
+  .pubwarn{
+    display:flex;gap:10px;align-items:flex-start;
+    background:var(--accent-tint);
+    border:1px solid var(--accent-line);border-left:3px solid var(--accent);
+    border-radius:var(--radius);
+    padding:11px 12px 11px 14px;margin:0 0 22px;
+  }
+  .pubwarn-body{flex:1;min-width:0}
+  .pubwarn-text{
+    margin:0;font-size:12.5px;line-height:1.6;color:var(--accent);
+  }
+  /* DEBUG: temporary, delete this rule with the .pubwarn-why elements */
+  .pubwarn-why{
+    margin:5px 0 0;font-size:11px;line-height:1.5;color:var(--muted);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    word-break:break-word;
+  }
+  .pubwarn-x{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    background:transparent;border:0;padding:0 2px;margin:0;line-height:1;
+    font-family:var(--sans);font-size:18px;color:var(--accent);opacity:.6;
+  }
+  .pubwarn-x:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---------- buttons ---------- */
+  .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;
+    font-family:var(--sans);font-size:12.5px;font-weight:500;
+    letter-spacing:.02em;text-decoration:none;
+    border-radius:999px;min-height:38px;padding:8px 17px;
+    border:1px solid var(--accent-line);
+    color:var(--accent);background:transparent;
+  }
+  .btn--sm{min-height:34px;padding:6px 14px;font-size:12px}
+  button.btn{
+    cursor:pointer;font-family:var(--sans);
+    -webkit-appearance:none;appearance:none;
+  }
+  .btn-block{display:flex;width:100%;min-height:48px;margin:10px 0 0}
+  .btn-inline{width:auto;min-height:44px;padding:12px 26px}
+  a:focus-visible,.tab:focus-visible{
+    outline:2px solid var(--accent);outline-offset:3px;border-radius:999px;
+  }
+
+  /* ---------- itinerary tabs ---------- */
+  .tabs{
+    display:flex;gap:8px;margin:0 0 26px;
+    overflow-x:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:4px;scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    flex:0 0 auto;
+    appearance:none;-webkit-appearance:none;cursor:pointer;
+    font-family:var(--sans);font-size:.88rem;font-weight:500;
+    color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:999px;
+    min-height:44px;padding:10px 20px;white-space:nowrap;
+  }
+  .tab[aria-selected="true"]{
+    background:var(--accent);border-color:var(--accent);
+    color:#fff;font-weight:600;
+  }
+  .panel[hidden]{display:none}
+
+  .day{padding:0 0 30px}
+  .day + .day{border-top:1px solid var(--line);padding-top:28px}
+  .day-head{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:0 0 18px}
+  .day-title{font-family:var(--serif);font-size:1.28rem;font-weight:400;margin:0}
+  .stops{list-style:none;margin:0;padding:0 0 0 20px;border-left:1px solid var(--line)}
+  .stop{position:relative;margin:0 0 14px;padding:16px 17px}
+  .stop:last-child{margin-bottom:0}
+  .stop::before{
+    content:"";position:absolute;left:-24px;top:22px;
+    width:7px;height:7px;border-radius:50%;
+    background:var(--paper);border:1.5px solid var(--accent);
+  }
+  .stop-time{
+    font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 4px;
+  }
+  .stop-name{font-family:var(--serif);font-size:1.06rem;margin:0 0 4px}
+  .stop-note{font-size:.92rem;color:var(--muted);margin:0 0 12px}
+  .stop .actions{margin-top:0}
+
+  /* ---------- favorites & thumbs ---------- */
+  .fbrow{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+  .fbtn{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    font-family:var(--sans);font-size:12.5px;font-weight:500;line-height:1;
+    color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:999px;
+    min-height:36px;padding:8px 15px;
+  }
+  .fbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .fbtn.on{
+    color:var(--accent);border-color:var(--accent-line);
+    background:var(--accent-tint);font-weight:600;
+  }
+  .card-stub{padding:15px 18px}
+  .stub-line{margin:0;font-size:13px;color:var(--muted)}
+  .stub-show{
+    -webkit-appearance:none;appearance:none;cursor:pointer;
+    background:none;border:0;padding:0;margin:0;
+    font-family:var(--sans);font-size:13px;color:var(--accent);
+    text-decoration:underline;
+  }
+  .downnote{
+    margin:0 0 10px;font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);
+  }
+  .stop .downnote{margin:0 0 8px}
+  .fbtoast{
+    position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(18px + env(safe-area-inset-bottom));
+    z-index:60;max-width:min(92vw,460px);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.55;color:var(--muted);
+    background:var(--surface);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:10px;padding:10px 14px;
+    box-shadow:var(--shadow-lift);word-break:break-word;
+  }
+
+  .empty{color:var(--muted);font-style:italic;font-family:var(--serif)}
+  footer{
+    padding:44px 0 0;margin-top:36px;
+    border-top:1px solid var(--line);
+    color:var(--muted);font-size:12.5px;
+  }
+
+  /* ===== applied design (green + panels) ===== */
+  .destination{font-weight:800;letter-spacing:-.03em}
+  .summary{font-style:normal;font-weight:400}
+  .sec-title{font-weight:700}
+  .card-name{font-weight:700}
+  .day-title{font-weight:700}
+  .stop-name{font-weight:600}
+  .state-title,.err-title{font-weight:700}
+  .price{background:rgba(14,59,58,.07)}
+  .tag{border-color:var(--accent-line)}
+  /* card gets an image-style panel on top */
+  .card{padding:0;overflow:hidden}
+  .card-stub{padding:14px 18px}
+  .card-body{padding:20px;display:flex;flex-direction:column;flex:1}
+  .thumb{height:150px;position:relative;overflow:hidden}
+  .art{position:relative;overflow:hidden;background:
+      radial-gradient(90% 120% at 22% 18%, var(--deep-2) 0%, transparent 60%),
+      radial-gradient(100% 120% at 85% 88%, var(--deep-3) 0%, transparent 55%),
+      linear-gradient(158deg, var(--deep) 0%, var(--deep-3) 100%);}
+  .art::before{content:"";position:absolute;inset:-25%;z-index:0;
+      background:repeating-radial-gradient(circle at 72% 28%, transparent 0 16px, rgba(255,255,255,.07) 16px 17px);
+      -webkit-mask-image:radial-gradient(circle at 50% 52%, transparent 0 42%, #000 74%);
+      mask-image:radial-gradient(circle at 50% 52%, transparent 0 42%, #000 74%)}
+  .art::after{content:"";position:absolute;inset:0;z-index:0;
+      background:radial-gradient(60% 80% at 78% 22%, rgba(183,145,84,.22) 0%, transparent 60%)}
+  .thumb .motif{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:86px;opacity:.85;z-index:2;pointer-events:none}
+  .thumb .motif svg{display:block;width:100%;height:auto;fill:#fff}
+  .day-motif{display:inline-flex;vertical-align:middle;margin-right:2px}
+  .day-motif svg{width:20px;height:20px;fill:var(--accent);opacity:.9}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ============ setup: no key stored ============ -->
+  <div id="setup" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">Set up</h1>
+      <p class="summary">Enter the shared access password once. It is stored only in this browser.</p>
+    </header>
+    <form id="setup-form">
+      <label class="field">
+        <span class="label">Access password</span>
+        <input type="password" id="key-input" placeholder="password"
+               autocomplete="off" autocapitalize="off" autocorrect="off"
+               spellcheck="false" enterkeyhint="done">
+      </label>
+      <button class="btn-solid" type="submit">Save password</button>
+      <p class="hint">Stored in this browser only. Clearing Safari's website data removes it and you'll re-enter the password.</p>
+      <p id="setup-err" class="hint" style="color:var(--accent)" hidden></p>
+    </form>
+  </div>
+
+  <!-- ============ main: ask for a destination ============ -->
+  <div id="main" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">Where to?</h1>
+      <p class="summary">Boutique hotels, real places, no tourist traps. Researched live with web search.</p>
+    </header>
+
+    <div class="pubwarn" id="pubwarn-main" hidden>
+      <div class="pubwarn-body">
+        <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+        <!-- DEBUG: temporary, delete this line when the fix is confirmed -->
+        <p class="pubwarn-why" id="pubwarn-main-why" hidden></p>
+      </div>
+      <button class="pubwarn-x" type="button" id="pubwarn-main-x" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <form id="trip-form">
+      <label class="field">
+        <span class="label">Destination</span>
+        <input type="text" id="dest-input" placeholder="Lisbon, 3 days"
+               autocapitalize="words" autocorrect="off" enterkeyhint="go">
+      </label>
+      <button class="btn-solid" type="submit" id="go">Plan trip</button>
+    </form>
+    <button class="btn btn-block" type="button" id="open-lib">My Library</button>
+    <button class="btn btn-block" type="button" id="open-fav">Favorites</button>
+    <button class="linkish" type="button" id="change-key">Change or clear password</button>
+  </div>
+
+  <!-- ============ my library (on-device) ============ -->
+  <div id="library" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">My Library</h1>
+      <p class="summary">Your own hotels, restaurants, sights and itineraries — kept on this device, and folded into any trip you plan for the same city.</p>
+    </header>
+
+    <div class="pubwarn" id="pubwarn-lib" hidden>
+      <div class="pubwarn-body">
+        <p class="pubwarn-text">You have unpublished changes &mdash; Publish to update your friends&rsquo; page and back up.</p>
+        <!-- DEBUG: temporary, delete this line when the fix is confirmed -->
+        <p class="pubwarn-why" id="pubwarn-lib-why" hidden></p>
+      </div>
+      <button class="pubwarn-x" type="button" id="pubwarn-lib-x" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <div id="lib-list"></div>
+    <p class="stored-now" id="lib-stored"></p>
+
+    <section id="lib-publish">
+      <div class="sec-head">
+        <h2 class="sec-title">Publish for friends</h2>
+        <span class="sec-count">Read-only page</span>
+      </div>
+      <p class="lib-hint">A read-only copy of this library, for friends to browse. No editing, no key, nothing personal — just the places.</p>
+      <span class="pub-link">https://7j22g5cgbk-svg.github.io/trip-planner/shared/</span>
+      <div class="actions">
+        <button class="btn" type="button" id="pub-make">Publish for friends</button>
+      </div>
+
+      <div id="pub-panel" hidden>
+        <ol class="pub-steps">
+          <li><strong>Copy</strong> the text below.</li>
+          <li>In your <code>trip-planner</code> folder, open <code>shared/data.js</code>, replace everything with it, save.</li>
+          <li>In GitHub Desktop: <strong>commit</strong> + <strong>Push</strong>. Your friends&rsquo; page updates.</li>
+        </ol>
+        <label class="field">
+          <span class="label">shared/data.js</span>
+          <textarea id="pub-out" rows="9" readonly spellcheck="false"></textarea>
+        </label>
+        <div class="actions">
+          <button class="btn" type="button" id="pub-copy">Copy</button>
+        </div>
+        <p class="lib-msg" id="pub-msg" hidden></p>
+      </div>
+    </section>
+
+    <section id="lib-backup">
+      <div class="sec-head">
+        <h2 class="sec-title">Backup</h2>
+        <span class="sec-count">Copy &amp; paste</span>
+      </div>
+      <p class="lib-hint">Nothing here leaves this device. To back up, copy the text below and keep it somewhere safe — a note, an email to yourself. To restore on another device, paste it into Import and tap Load.</p>
+
+      <label class="field">
+        <span class="label">Export</span>
+        <textarea id="lib-export" rows="7" readonly spellcheck="false"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn" type="button" id="lib-copy">Copy</button>
+      </div>
+
+      <label class="field" style="margin-top:26px">
+        <span class="label">Import</span>
+        <textarea id="lib-import" rows="7" spellcheck="false" autocapitalize="off"
+                  autocorrect="off" placeholder="Paste exported library JSON here"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn" type="button" id="lib-load">Load</button>
+      </div>
+      <p class="lib-msg" id="lib-backup-msg" hidden></p>
+    </section>
+
+    <button class="linkish" type="button" id="lib-back">Back to planner</button>
+  </div>
+
+  <!-- ============ favorites (on-device) ============ -->
+  <div id="favorites" hidden>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination">Favorites</h1>
+      <p class="summary">Places you hearted, kept on this device — and the thumbs that steer the next trip you plan.</p>
+    </header>
+
+    <div id="fav-list"></div>
+    <p class="stored-now" id="fav-stored"></p>
+
+    <div class="actions" style="margin-top:20px">
+      <button class="btn" type="button" id="fav-clear">Clear all feedback</button>
+    </div>
+
+    <button class="linkish" type="button" id="fav-back">Back to planner</button>
+  </div>
+
+  <!-- ============ loading ============ -->
+  <div id="loading" class="state" hidden>
+    <div class="spinner" role="status" aria-live="polite"></div>
+    <p class="state-title">Researching…</p>
+    <p class="state-note">This takes a minute or two. Keep this tab in the foreground — iOS may pause background tabs.</p>
+  </div>
+
+  <!-- ============ error ============ -->
+  <div id="error" class="state" hidden>
+    <div class="err">
+      <p class="err-title" id="err-title">Something went wrong</p>
+      <p class="err-msg" id="err-msg"></p>
+      <details id="err-raw-wrap" hidden>
+        <summary>Show raw response</summary>
+        <pre class="raw" id="err-raw"></pre>
+      </details>
+    </div>
+    <button class="linkish" type="button" id="err-back">Back</button>
+  </div>
+
+  <!-- ============ result ============ -->
+  <div id="result" hidden>
+    <div class="topbar">
+      <button class="topbtn" type="button" id="r-new">← New search</button>
+      <button class="topbtn push" type="button" id="r-fav">Favorites</button>
+      <button class="topbtn" type="button" id="r-lib">My Library</button>
+    </div>
+    <header class="masthead">
+      <p class="eyebrow">Travel Brief</p>
+      <h1 class="destination" id="r-dest"></h1>
+      <p class="summary" id="r-summary"></p>
+    </header>
+    <main id="r-content"></main>
+    <footer id="r-footer"></footer>
+    <p class="saved-note" id="r-saved" hidden></p>
+    <button class="linkish" type="button" id="again">Plan another trip</button>
+  </div>
+
+  <div class="fbtoast" id="fbtoast" role="status" aria-live="polite" hidden></div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* The only endpoint this page ever talks to. */
+  var API_URL = "https://trip-backend.fhy5byhvk9.workers.dev";
+  var STORE_KEY = "anthropic_key";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var views = ["setup", "main", "library", "favorites", "loading", "error", "result"];
+  function show(name) {
+    views.forEach(function (v) { $(v).hidden = (v !== name); });
+    window.scrollTo(0, 0);
+    /* the unpublished-changes banner lives on two screens; keep both honest */
+    try { updateUnpublished(); } catch (e) {}
+  }
+
+  /* ---------- key storage (localStorage only) ---------- */
+  function getKey() {
+    try { return localStorage.getItem(STORE_KEY) || ""; } catch (e) { return ""; }
+  }
+  function setKey(v) {
+    try { localStorage.setItem(STORE_KEY, v); return true; } catch (e) { return false; }
+  }
+  function clearKey() {
+    try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+  }
+
+  /* ---------- helpers (same rules as the desktop template) ---------- */
+  function esc(v) {
+    if (v === null || v === undefined) return "";
+    return String(v)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function txt(v) { return v === null || v === undefined ? "" : String(v).trim(); }
+  function arr(v) {
+    if (!Array.isArray(v)) return [];
+    return v.filter(function (x) { return x && typeof x === "object"; });
+  }
+  /* Only http(s), so a bad value can never become javascript: */
+  function url(v) {
+    var s = txt(v);
+    return /^https?:\/\//i.test(s) ? esc(s) : "";
+  }
+  function plus(s) {
+    return encodeURIComponent(txt(s).replace(/\s+/g, " ")).replace(/%20/g, "+");
+  }
+
+  /* Website fields get typed on a phone, where autocorrect likes to drop a
+     space after "https://" and a full stop at the end. Neither can occur in
+     a real URL and both break the link quietly: the space made the button
+     open nothing, the trailing dot trips the site's certificate. Clean that
+     damage as the field is read, and add the scheme when what remains is
+     plainly a domain. Anything that is not URL-shaped is left exactly as
+     typed — url() above already refuses to link it. */
+  function cleanWebsite(v) {
+    var s = txt(v).replace(/\s+/g, "").replace(/[.,;:]+$/, "");
+    if (!s) return "";
+    if (!/^[a-z][a-z0-9+.\-]*:\/\//i.test(s) &&
+        /^[a-z0-9\-]+(\.[a-z0-9\-]+)+(\/.*)?$/i.test(s)) {
+      s = "https://" + s;
+    }
+    return s;
+  }
+
+  var destQ = "";
+  function query(name) { return plus(destQ ? name + " " + destQ : name); }
+
+  /* Always yields a map link: the researched URL if valid, else one we build. */
+  function mapsFor(item) {
+    var direct = url(item.maps);
+    if (direct) return direct;
+    var n = txt(item.name);
+    if (!n) return "";
+    return esc("https://www.google.com/maps/search/?api=1&query=" + query(n));
+  }
+  /* The same map link, unescaped, for storing in favorites. */
+  function rawMaps(item) {
+    var s = txt(item.maps);
+    if (/^https?:\/\//i.test(s)) return s;
+    var n = txt(item.name);
+    if (!n) return "";
+    return "https://www.google.com/maps/search/?api=1&query=" + query(n);
+  }
+
+  /* "Lisbon, 3 days" and "4 nights in Lisbon" both key as "Lisbon", so a
+     vote cast on one trip still counts on the next trip to the same city. */
+  function cityOf(dest) {
+    var parts = txt(dest).split(",");
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i]
+        .replace(/\b\d+\s*(?:days?|nights?|weeks?|hours?|hrs?)\b/gi, " ")
+        .replace(/^\s*(?:for|in|to|a|an)\s+/i, " ")
+        .replace(/\s+/g, " ").trim();
+      if (part) return part;
+    }
+    return txt(dest);
+  }
+
+  function routeFor(day) {
+    var direct = url(day.route_maps);
+    if (direct) return direct;
+    var names = arr(day.stops).map(function (s) { return txt(s.name); })
+                              .filter(function (n) { return n; });
+    if (!names.length) return "";
+    var u = "https://www.google.com/maps/dir/?api=1&destination=" + query(names[names.length - 1]);
+    if (names.length > 1) {
+      u += "&waypoints=" + names.slice(0, -1).map(query).join("|");
+    }
+    return esc(u);
+  }
+  /* href is already escaped by url()/mapsFor()/routeFor(). */
+  function link(href, label, small) {
+    if (!href) return "";
+    return '<a class="btn' + (small ? " btn--sm" : "") + '" href="' + href +
+           '" target="_blank" rel="noopener noreferrer">' + esc(label) + "</a>";
+  }
+  /* When a place has no verified website, fall back to a Google search for
+     its official site. Free, and works for places saved before websites
+     were captured. */
+  function siteSearch(item) {
+    var n = txt(item.name);
+    if (!n) return "";
+    var c = txt(item.city);
+    return esc("https://www.google.com/search?q=" +
+               plus((c ? n + " " + c : n) + " official website"));
+  }
+  function actions(item, small) {
+    var direct = url(item.website);
+    var siteBtn = direct
+      ? link(direct, "Website", small)
+      : link(siteSearch(item), small ? "Site" : "Find website", small);
+    return siteBtn + link(mapsFor(item), small ? "Map" : "Google Maps", small);
+  }
+  function section(id, title, count, body) {
+    return '<section id="' + id + '"><div class="sec-head">' +
+             '<h2 class="sec-title">' + esc(title) + "</h2>" +
+             '<span class="sec-count">' + esc(count) + "</span>" +
+           "</div>" + body + "</section>";
+  }
+
+  /* ============ favorites & thumbs (this device only) ============
+       "travel_feedback"  { "<type>|<city>|<name>": {type,name,city,vote,ts} }
+       "travel_favorites" [ {type,name,city,note,website,maps,ts} ]
+     Both are read fresh every time they are used. A read that fails is
+     recorded rather than treated as "empty" — the write paths refuse to
+     overwrite data they could not read, so one unreadable read can never
+     wipe the store. Nothing here ever leaves the device except as the
+     short PREFERENCES line in the prompt. */
+
+  var FB_KEY  = "travel_feedback";
+  var FAV_KEY = "travel_favorites";
+  var FB_ORDER = ["hotel", "restaurant", "sight"];
+  var FB_TITLE = { hotel: "Hotels", restaurant: "Restaurants", sight: "Sights" };
+  var FB_ONE   = { hotel: "hotel", restaurant: "restaurant", sight: "sight" };
+
+  var fbUnreadable = "";    /* "" when the last feedback read was clean */
+  var favUnreadable = "";   /* "" when the last favorites read was clean */
+
+  function fbKey(type, city, name) {
+    return (txt(type) + "|" + txt(city) + "|" + txt(name)).toLowerCase().trim();
+  }
+
+  function loadFeedback() {
+    var raw = null, parsed = null;
+    fbUnreadable = "";
+    try { raw = localStorage.getItem(FB_KEY); }
+    catch (e) {
+      fbUnreadable = "this browser would not let the page read its storage";
+      return {};
+    }
+    if (raw === null) return {};              /* genuinely empty: safe to write */
+    try { parsed = JSON.parse(raw); }
+    catch (e) {
+      fbUnreadable = "the saved votes are there but are not readable JSON";
+      return {};
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      fbUnreadable = "the saved votes are not in the shape this page writes";
+      return {};
+    }
+    var out = {};
+    Object.keys(parsed).forEach(function (k) {
+      var v = parsed[k];
+      if (!v || typeof v !== "object") return;
+      if (v.vote !== "up" && v.vote !== "down") return;
+      out[k] = {
+        type: txt(v.type), name: txt(v.name), city: txt(v.city),
+        vote: v.vote, ts: typeof v.ts === "number" ? v.ts : 0
+      };
+    });
+    return out;
+  }
+
+  function loadFavorites() {
+    var raw = null, parsed = null;
+    favUnreadable = "";
+    try { raw = localStorage.getItem(FAV_KEY); }
+    catch (e) {
+      favUnreadable = "this browser would not let the page read its storage";
+      return [];
+    }
+    if (raw === null) return [];
+    try { parsed = JSON.parse(raw); }
+    catch (e) {
+      favUnreadable = "the saved favorites are there but are not readable JSON";
+      return [];
+    }
+    if (!Array.isArray(parsed)) {
+      favUnreadable = "the saved favorites are not in the shape this page writes";
+      return [];
+    }
+    var out = [];
+    parsed.forEach(function (v) {
+      if (!v || typeof v !== "object") return;
+      var name = txt(v.name);
+      if (!name) return;
+      out.push({
+        type: txt(v.type) || "sight", name: name, city: txt(v.city),
+        note: txt(v.note), website: txt(v.website), maps: txt(v.maps),
+        ts: typeof v.ts === "number" ? v.ts : 0
+      });
+    });
+    return out;
+  }
+
+  /* Two taps inside the same millisecond would otherwise tie, and the
+     "15 most recent" cap would then keep the oldest. Never goes backwards. */
+  var lastStamp = 0;
+  function stamp() {
+    var now = Date.now();
+    lastStamp = now > lastStamp ? now : lastStamp + 1;
+    return lastStamp;
+  }
+
+  function writeJson(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (e) { return false; }
+  }
+
+  function getVote(type, name, city) {
+    var hit = loadFeedback()[fbKey(type, city, name)];
+    return hit ? hit.vote : "";
+  }
+  function setVote(type, name, city, vote) {
+    if (vote !== "up" && vote !== "down") return false;
+    var fb = loadFeedback();
+    if (fbUnreadable) return false;
+    var k = fbKey(type, city, name);
+    var prev = (fb[k] && (fb[k].vote === "up" || fb[k].vote === "down")) ? fb[k].vote : "";
+    fb[k] = {
+      type: txt(type), name: txt(name), city: txt(city),
+      vote: vote, ts: stamp()
+    };
+    var ok = writeJson(FB_KEY, fb);
+    if (ok) sendVoteBeacon(type, name, city, vote, prev);
+    return ok;
+  }
+  function clearVote(type, name, city) {
+    var fb = loadFeedback();
+    if (fbUnreadable) return false;
+    var k = fbKey(type, city, name);
+    if (!fb.hasOwnProperty(k)) return true;
+    var prev = (fb[k] && (fb[k].vote === "up" || fb[k].vote === "down")) ? fb[k].vote : "";
+    delete fb[k];
+    var ok = writeJson(FB_KEY, fb);
+    if (ok && prev) sendVoteBeacon(type, name, city, "none", prev);
+    return ok;
+  }
+
+  /* Quietly report a vote to the backend for combined totals.
+     Fire-and-forget: any failure is ignored and never affects the app. */
+  function sendVoteBeacon(type, name, city, vote, prev) {
+    try {
+      var pw = getKey();
+      if (!pw) return;
+      fetch(API_URL + "/vote", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-trip-password": pw },
+        body: JSON.stringify({
+          id: fbKey(type, city, name),
+          vote: vote, prev: prev || "",
+          type: txt(type), name: txt(name), city: txt(city)
+        }),
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  function isFavorite(type, name, city) {
+    var k = fbKey(type, city, name), found = false;
+    loadFavorites().forEach(function (f) {
+      if (fbKey(f.type, f.city, f.name) === k) found = true;
+    });
+    return found;
+  }
+  /* place: {type,name,city,note,website,maps}. Returns the new state. */
+  function toggleFavorite(place) {
+    var favs = loadFavorites();
+    var k = fbKey(place.type, place.city, place.name);
+    if (favUnreadable) {                       /* never write over what we could not read */
+      var still = false;
+      favs.forEach(function (f) { if (fbKey(f.type, f.city, f.name) === k) still = true; });
+      return still;
+    }
+    var kept = favs.filter(function (f) { return fbKey(f.type, f.city, f.name) !== k; });
+    var nowOn = (kept.length === favs.length);   /* nothing removed -> it was not saved */
+    if (nowOn) {
+      kept.push({
+        type: txt(place.type), name: txt(place.name), city: txt(place.city),
+        note: txt(place.note), website: txt(place.website),
+        maps: txt(place.maps), ts: stamp()
+      });
+    }
+    writeJson(FAV_KEY, kept);
+    return nowOn;
+  }
+  function removeFavoriteByKey(k) {
+    var favs = loadFavorites();
+    if (favUnreadable) return false;
+    var kept = favs.filter(function (f) { return fbKey(f.type, f.city, f.name) !== k; });
+    if (kept.length === favs.length) return false;
+    return writeJson(FAV_KEY, kept);
+  }
+
+  /* Read straight out of localStorage. Returns "" when both stores are
+     healthy — a save says so with a tick, not with a tally — and the honest
+     description of the trouble when there is any. */
+  function storageTrouble() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(FAV_KEY); }
+    catch (e) {
+      return "Cannot read localStorage in this browser (" + ((e && e.name) || "error") + ").";
+    }
+    if (raw !== null) {
+      try { parsed = JSON.parse(raw); }
+      catch (e) { return "Your favorites will not parse \u2014 nothing was overwritten."; }
+      if (!Array.isArray(parsed)) {
+        return "Your favorites are not in the shape this page writes \u2014 nothing was overwritten.";
+      }
+    }
+    raw = null; parsed = null;
+    try { raw = localStorage.getItem(FB_KEY); }
+    catch (e) {
+      return "Cannot read localStorage in this browser (" + ((e && e.name) || "error") + ").";
+    }
+    if (raw !== null) {
+      try { parsed = JSON.parse(raw); }
+      catch (e) { return "Your votes will not parse \u2014 nothing was overwritten."; }
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return "Your votes are not in the shape this page writes \u2014 nothing was overwritten.";
+      }
+    }
+    return "";
+  }
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $("fbtoast");
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 2000);
+  }
+
+  /* ---------- place cards with feedback controls ----------
+     Every card gets its own id and its own entry in cardReg, so a tap can
+     repaint exactly that card and rebind exactly its own buttons. Handlers
+     are set directly on each button (onclick) after every paint: nothing
+     depends on events bubbling out of markup innerHTML has replaced. */
+  var cardSeq = 0;
+  var cardReg = {};
+  var tripCity = "";
+
+  function newCard(type, item, note, metaHtml) {
+    var id = "pc" + (++cardSeq);
+    cardReg[id] = {
+      item: item,
+      metaHtml: metaHtml || "",
+      saved: item.saved === true,
+      shown: false,                    /* "Show" opened a downvoted card */
+      place: {
+        type: type,
+        name: txt(item.name),
+        city: tripCity,
+        note: txt(note),
+        website: url(item.website) ? txt(item.website) : "",
+        maps: rawMaps(item)
+      }
+    };
+    return cardHtml(id);
+  }
+
+
+  var MOTIF={hotel:'<path d="M216,76H28V48a4,4,0,0,0-8,0V208a4,4,0,0,0,8,0V172H244v36a4,4,0,0,0,8,0V112A36,36,0,0,0,216,76ZM28,84h80v80H28Zm88,80V84H216a28,28,0,0,1,28,28v52Z"/>',restaurant:'<path d="M76,88V40a4,4,0,0,1,8,0V88a4,4,0,0,1-8,0ZM212,40V224a4,4,0,0,1-8,0V172H152a4,4,0,0,1-4-4,264.27,264.27,0,0,1,7.11-55.94c9.47-39.22,27.21-65.41,51.31-75.74A4,4,0,0,1,212,40Zm-8,6.46C162.25,70.33,156.81,145.75,156.1,164H204Zm-88-7.12a4,4,0,0,0-7.9,1.32l8,47.66a36,36,0,0,1-72,0l8-47.66a4,4,0,0,0-7.9-1.32l-8,48A4.89,4.89,0,0,0,36,88a44.06,44.06,0,0,0,40,43.81V224a4,4,0,0,0,8,0V131.81A44.06,44.06,0,0,0,124,88a4.89,4.89,0,0,0,0-.66Z"/>',sight:'<path d="M24,100H52v72H32a4,4,0,0,0,0,8H224a4,4,0,0,0,0-8H204V100h28a4,4,0,0,0,2.1-7.41l-104-64a4,4,0,0,0-4.2,0l-104,64A4,4,0,0,0,24,100Zm36,0h40v72H60Zm88,0v72H108V100Zm48,72H156V100h40ZM128,36.7,217.87,92H38.13ZM244,208a4,4,0,0,1-4,4H16a4,4,0,0,1,0-8H240A4,4,0,0,1,244,208Z"/>'};
+  function motifFor(t){var ic=MOTIF[t]||MOTIF.sight;return '<div class="thumb art"><div class="motif"><svg viewBox="0 0 256 256">'+ic+'</svg></div></div>';}
+  var MAPMOTIF='<path d="M226.46,52.85a4,4,0,0,0-3.43-.73L160.47,67.76,97.79,36.42a4,4,0,0,0-2.76-.3l-64,16A4,4,0,0,0,28,56V200a4,4,0,0,0,5,3.88l62.56-15.64,62.68,31.34a4,4,0,0,0,2.76.3l64-16a4,4,0,0,0,3-3.88V56A4,4,0,0,0,226.46,52.85ZM100,46.47l56,28V209.53l-56-28ZM36,59.12l56-14V180.88l-56,14ZM220,196.88l-56,14V75.12l56-14Z"/>';
+  function cardHtml(id) {
+    var c = cardReg[id];
+    if (!c) return "";
+    var p = c.place;
+    var vote = getVote(p.type, p.name, p.city);   /* read fresh at paint time */
+    var fav = isFavorite(p.type, p.name, p.city);
+
+    if (vote === "down" && !c.shown) {
+      return '<article class="card card-stub" id="' + id + '">' +
+        '<p class="stub-line">Hidden \u2014 you downvoted this \u00b7 ' +
+        '<button class="stub-show" type="button" data-fb="show">Show</button></p>' +
+        "</article>";
+    }
+    return '<article class="card" id="' + id + '">' +
+      motifFor(p.type) + '<div class="card-body">' +
+      (c.saved ? '<div><span class="tag">\u2605 my saved place</span></div>' : "") +
+      '<h3 class="card-name">' + esc(p.name) + "</h3>" +
+      c.metaHtml +
+      (vote === "down" ? '<p class="downnote">you downvoted this</p>' : "") +
+      (p.note ? '<p class="card-note">' + esc(p.note) + "</p>" : "") +
+      '<div class="fbrow">' +
+        '<button class="fbtn' + (fav ? " on" : "") + '" type="button" data-fb="fav" ' +
+          'aria-pressed="' + (fav ? "true" : "false") + '">' +
+          (fav ? "\u2665 Favorited" : "\u2661 Favorite") + "</button>" +
+        '<button class="fbtn' + (vote === "up" ? " on" : "") + '" type="button" data-fb="up" ' +
+          'aria-label="Good recommendation" aria-pressed="' + (vote === "up" ? "true" : "false") +
+          '">\ud83d\udc4d</button>' +
+        '<button class="fbtn' + (vote === "down" ? " on" : "") + '" type="button" data-fb="down" ' +
+          'aria-label="Bad recommendation" aria-pressed="' + (vote === "down" ? "true" : "false") +
+          '">\ud83d\udc4e</button>' +
+      "</div>" +
+      '<div class="actions">' + actions(c.item) + "</div></div></article>";
+  }
+
+  function bindCard(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    Array.prototype.forEach.call(el.querySelectorAll("[data-fb]"), function (btn) {
+      btn.onclick = function () {
+        cardAction(id, btn.getAttribute("data-fb"));
+        return false;
+      };
+    });
+  }
+  /* Swap the one card, then rebind that card's own buttons. */
+  function repaintCard(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.outerHTML = cardHtml(id);
+    bindCard(id);
+  }
+
+  function cardAction(id, act) {
+    var c = cardReg[id];
+    if (!c) return;
+    var p = c.place;
+
+    if (act === "show") { c.shown = true; repaintCard(id); return; }
+
+    if (act === "fav") {
+      toggleFavorite(p);
+    } else if (act === "up" || act === "down") {
+      /* tapping the vote that is already set clears it */
+      if (getVote(p.type, p.name, p.city) === act) clearVote(p.type, p.name, p.city);
+      else { setVote(p.type, p.name, p.city, act); c.shown = false; }
+    } else {
+      return;
+    }
+    repaintCard(id);
+    toast(storageTrouble() || "Saved \u2713");
+  }
+
+  /* ---------- rendering ---------- */
+  function render(trip) {
+    destQ = txt(trip.destination) || lastDest;
+    tripCity = cityOf(destQ);
+    mergeLibrary(trip);
+    cardSeq = 0;
+    cardReg = {};
+    var fbNow = loadFeedback();   /* read fresh, once, for the itinerary stops */
+    var html = "";
+
+    var hotels = arr(trip.hotels);
+    if (hotels.length) {
+      html += section("hotels", "Hotels",
+        hotels.length + (hotels.length === 1 ? " stay" : " stays"),
+        '<div class="grid">' + hotels.map(function (h) {
+          return newCard("hotel", h, h.why,
+            txt(h.price) ? '<p class="price">' + esc(h.price) + "</p>" : "");
+        }).join("") + "</div>");
+    }
+
+    var itins = arr(trip.itineraries).filter(function (i) { return arr(i.days).length; });
+    if (itins.length) {
+      var tabs = "", panels = "";
+      itins.forEach(function (it, idx) {
+        var name = txt(it.name) || "Itinerary " + (idx + 1);
+        tabs += '<button class="tab" type="button" role="tab" data-idx="' + idx +
+                '" aria-selected="' + (idx === 0) + '">' + esc(name) + "</button>";
+        var days = arr(it.days).map(function (d) {
+          var stops = arr(d.stops).map(function (s) {
+            var acts = actions(s, true);
+            /* A downvoted stop stays put — hiding it would break the day. */
+            var hit = fbNow[fbKey("sight", tripCity, txt(s.name))];
+            var down = !!(hit && hit.vote === "down");
+            return '<li class="stop">' +
+              (txt(s.time) ? '<p class="stop-time">' + esc(s.time) + "</p>" : "") +
+              '<p class="stop-name">' + esc(s.name) + "</p>" +
+              (down ? '<p class="downnote">you downvoted this</p>' : "") +
+              (txt(s.note) ? '<p class="stop-note">' + esc(s.note) + "</p>" : "") +
+              (acts ? '<div class="actions">' + acts + "</div>" : "") + "</li>";
+          }).join("");
+          return '<div class="day"><div class="day-head">' +
+            '<span class="day-motif"><svg viewBox="0 0 256 256">' + MAPMOTIF + '</svg></span>' +
+            '<h3 class="day-title">Day ' + esc(d.day) + "</h3>" +
+            link(routeFor(d), "Open route in Google Maps", true) + "</div>" +
+            (stops ? '<ul class="stops">' + stops + "</ul>"
+                   : '<p class="empty">No stops listed.</p>') + "</div>";
+        }).join("");
+        panels += '<div class="panel" role="tabpanel" data-idx="' + idx + '"' +
+                  (idx === 0 ? "" : " hidden") + ">" + days + "</div>";
+      });
+      html += section("itineraries", "Itineraries",
+        itins.length + (itins.length === 1 ? " plan" : " plans"),
+        '<div class="tabs" role="tablist">' + tabs + "</div>" + panels);
+    }
+
+    var rests = arr(trip.restaurants);
+    if (rests.length) {
+      html += section("restaurants", "Restaurants", rests.length + " places",
+        '<div class="grid">' + rests.map(function (r) {
+          return newCard("restaurant", r, r.note,
+            txt(r.cuisine) ? '<p class="card-meta">' + esc(r.cuisine) + "</p>" : "");
+        }).join("") + "</div>");
+    }
+
+    var sights = arr(trip.sights);
+    if (sights.length) {
+      html += section("sights", "Sights", sights.length + " to see",
+        '<div class="grid">' + sights.map(function (g) {
+          return newCard("sight", g, g.note, "");
+        }).join("") + "</div>");
+    }
+
+    $("r-dest").textContent = txt(trip.destination) || "Your trip";
+    $("r-summary").textContent = txt(trip.summary);
+    $("r-content").innerHTML = html ||
+      '<section><p class="empty">Nothing came back for this trip.</p></section>';
+    $("r-footer").textContent =
+      "Researched " + new Date().toLocaleDateString() +
+      " · verify hours and availability before you go.";
+    $("r-saved").textContent = "Saved \u2713 \u00b7 your library places are in this brief.";
+    $("r-saved").hidden = !(lastMerge && lastMerge.any);
+
+    /* One handler per button, set directly on the button, after the paint. */
+    Object.keys(cardReg).forEach(function (id) { bindCard(id); });
+
+    /* tab switching */
+    var root = $("r-content");
+    Array.prototype.forEach.call(root.querySelectorAll(".tab"), function (t) {
+      t.addEventListener("click", function () {
+        var idx = t.getAttribute("data-idx");
+        Array.prototype.forEach.call(root.querySelectorAll(".tab"), function (o) {
+          o.setAttribute("aria-selected", o.getAttribute("data-idx") === idx ? "true" : "false");
+        });
+        Array.prototype.forEach.call(root.querySelectorAll(".panel"), function (p) {
+          p.hidden = p.getAttribute("data-idx") !== idx;
+        });
+      });
+    });
+
+    show("result");
+  }
+
+  /* ---------- errors ---------- */
+  function fail(title, msg, raw) {
+    $("err-title").textContent = title;
+    $("err-msg").textContent = msg || "";
+    if (raw) {
+      $("err-raw").textContent = raw;
+      $("err-raw-wrap").hidden = false;
+    } else {
+      $("err-raw-wrap").hidden = true;
+    }
+    show("error");
+  }
+
+  /* Scan for the first balanced {...} object. Brace-counting, not a greedy
+     regex: braces inside string literals are skipped, so prose before or
+     after the object cannot throw the match off. Returns "" if none. */
+  function extractJsonObject(s) {
+    var start = s.indexOf("{");
+    if (start === -1) return "";
+    var depth = 0, inStr = false, escaped = false;
+    for (var i = start; i < s.length; i++) {
+      var ch = s.charAt(i);
+      if (inStr) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') { inStr = true; continue; }
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) return s.slice(start, i + 1);
+      }
+    }
+    return "";
+  }
+
+  /* ---------- what the thumbs tell the next generation ----------
+     Capped at 15 names per list, newest first, each name clamped, so a long
+     history can never quietly inflate the prompt. Returns "" when there is
+     no feedback at all, and then the prompt is exactly what it always was. */
+  var PREF_MAX = 15;
+
+  function prefLabel(name, city) {
+    function clamp(v) {
+      var t = txt(v).replace(/\s+/g, " ");
+      return t.length > 60 ? t.slice(0, 57) + "\u2026" : t;
+    }
+    var n = clamp(name), c = clamp(city);
+    if (!n) return "";
+    return c ? n + " (" + c + ")" : n;
+  }
+
+  function preferencesBlock() {
+    var fb = loadFeedback();
+    var favs = loadFavorites();
+    var down = [], up = [], downKeys = {}, seq = 0;
+
+    Object.keys(fb).forEach(function (k) {
+      var e = fb[k];
+      var row = { key: k, ts: e.ts || 0, seq: seq++, label: prefLabel(e.name, e.city) };
+      if (e.vote === "down") { downKeys[k] = true; down.push(row); }
+      else up.push(row);
+    });
+    favs.forEach(function (f) {
+      up.push({
+        key: fbKey(f.type, f.city, f.name),
+        ts: f.ts || 0,
+        seq: seq++,
+        label: prefLabel(f.name, f.city)
+      });
+    });
+
+    /* newest first, one entry per place, downvotes always win over a like.
+       Equal timestamps fall back to how they sit in storage, newest last. */
+    function pick(list, skip) {
+      var seen = {}, out = [];
+      list.sort(function (a, b) { return (b.ts - a.ts) || (b.seq - a.seq); });
+      for (var i = 0; i < list.length && out.length < PREF_MAX; i++) {
+        var row = list[i];
+        if (!row.label || seen[row.key] || (skip && skip[row.key])) continue;
+        seen[row.key] = true;
+        out.push(row.label);
+      }
+      return out;
+    }
+    var dislikes = pick(down, null);
+    var likes = pick(up, downKeys);
+    if (!dislikes.length && !likes.length) return "";
+
+    var block = " PREFERENCES from this traveller's own saved feedback:";
+    if (dislikes.length) {
+      block += " Do NOT recommend these places the user disliked: " +
+               dislikes.join("; ") + ".";
+    }
+    if (likes.length) {
+      block += " The user likes these \u2014 favor similar style and quality: " +
+               likes.join("; ") + ".";
+    }
+    return block;
+  }
+
+  /* ---------- prompt ---------- */
+  function buildPrompt(dest) {
+    return "You are my personal travel researcher. Research " + dest +
+      " using web search and build a travel brief. My taste: boutique, design-led hotels, " +
+      "adults-only where possible, air conditioning and a pool preferred, fine dining and " +
+      "curated non-touristy spots. Return ONLY a JSON object (no prose, no code fences) with " +
+      "this shape: { destination, summary, hotels:[{name,why,price,website,maps}], " +
+      "itineraries:[{name,days:[{day,stops:[{time,name,note,maps,website}],route_maps}]}] " +
+      "(produce EXACTLY 3 genuinely different itineraries), " +
+      "restaurants:[{name,cuisine,note,website,maps,saved}], sights:[{name,note,maps,website}] }. " +
+      "Sights and stops must be REAL named places, never activities/meals. For " +
+      "hotels/restaurants/sights/stops, use web search to find the official website and put the " +
+      "verified URL in website, else empty string. Set saved=false everywhere. " +
+      "Never invent places or links. HARD LIMITS: Output ONLY the JSON, nothing else. " +
+      "EXACTLY 3 itineraries. summary: max 20 words. Every 'why', 'note', and 'cuisine' " +
+      "field: max 12 words. Do NOT repeat disclaimer text in notes - if something is " +
+      "unverified, write only 'unverified'. Keep the whole response as compact as possible." +
+      preferencesBlock();
+  }
+
+  /* ---------- API call ---------- */
+  function planTrip(dest) {
+    var key = getKey();
+    if (!key) { show("setup"); return; }
+    show("loading");
+
+    var body = {
+      model: "claude-sonnet-5",
+      max_tokens: 12000,
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      messages: [{ role: "user", content: buildPrompt(dest) }]
+    };
+
+    fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-trip-password": key
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.text().then(function (text) {
+        return { ok: res.ok, status: res.status, text: text };
+      });
+    }).then(function (r) {
+      var data = null;
+      try { data = JSON.parse(r.text); } catch (e) { data = null; }
+
+      if (!r.ok) {
+        var apiMsg = (data && data.error && data.error.message) || r.text || "";
+        if (r.status === 401 || r.status === 403) {
+          fail("Check your password",
+               "The server rejected the password (HTTP " + r.status + "). " +
+               "Use “Change or clear password” to enter it again.", apiMsg);
+        } else if (r.status === 429) {
+          fail("Rate limited", apiMsg || "Too many requests. Wait a moment and try again.", r.text);
+        } else if (r.status === 400 && /credit|balance|quota/i.test(apiMsg)) {
+          fail("Credit problem", apiMsg, r.text);
+        } else {
+          fail("The API returned an error (HTTP " + r.status + ")", apiMsg, r.text);
+        }
+        return;
+      }
+
+      if (!data) { fail("Unreadable response", "The API reply was not valid JSON.", r.text); return; }
+
+      /* Concatenate every text block; ignore web_search tool blocks. */
+      var parts = [];
+      if (Array.isArray(data.content)) {
+        data.content.forEach(function (b) {
+          if (b && b.type === "text" && typeof b.text === "string") parts.push(b.text);
+        });
+      }
+      var raw = parts.join("\n").trim();
+
+      /* stop_reason "max_tokens" means the answer was cut off mid-JSON. */
+      var truncated = (data.stop_reason === "max_tokens");
+      function tooLong(rawText) {
+        fail("Ran out of room",
+             "The trip was too long to finish - tap Plan again.", rawText);
+      }
+
+      if (!raw) {
+        if (truncated) { tooLong(r.text); return; }
+        fail("Empty answer",
+             "The model returned no text" +
+             (data.stop_reason ? " (stop_reason: " + data.stop_reason + ")." : "."),
+             r.text);
+        return;
+      }
+
+      /* The model sometimes writes prose before the JSON. Drop any fence
+         markers, then take the first balanced { ... } block. */
+      var candidate = extractJsonObject(raw.replace(/```[a-zA-Z]*/g, " "));
+      if (!candidate) candidate = extractJsonObject(raw);
+
+      var trip = null;
+      try { trip = JSON.parse(candidate); } catch (e) { trip = null; }
+
+      if (!trip || typeof trip !== "object" || Array.isArray(trip)) {
+        if (truncated) { tooLong(raw); return; }
+        fail("Could not read the trip data",
+             "The model replied, but not with the JSON this page expects.", raw);
+        return;
+      }
+      render(trip);
+    }).catch(function (e) {
+      fail("No connection",
+           "The request could not be sent. Check your internet connection and try again.",
+           String(e && e.message ? e.message : e));
+    });
+  }
+
+  /* ================= My Library (this device only) =================
+     Stored under "travel_library" as
+       { hotels:[], restaurants:[], sights:[], itineraries:[] }
+     Everything below is local: no request ever carries it anywhere. */
+
+  var LIB_KEY = "travel_library";
+  var LIB_TYPES = ["hotels", "restaurants", "sights", "itineraries"];
+  var LIB_TITLE = {
+    hotels: "Hotels", restaurants: "Restaurants",
+    sights: "Sights", itineraries: "Itineraries"
+  };
+  var LIB_ONE = {
+    hotels: "hotel", restaurants: "restaurant",
+    sights: "sight", itineraries: "itinerary"
+  };
+  /* [field, label, isTextarea] */
+  var LIB_FIELDS = {
+    hotels: [["name", "Name"], ["city", "City"], ["note", "Note", true],
+             ["price", "Price"], ["website", "Website"]],
+    restaurants: [["name", "Name"], ["city", "City"], ["cuisine", "Cuisine"],
+                  ["note", "Note", true], ["website", "Website"]],
+    sights: [["name", "Name"], ["city", "City"], ["note", "Note", true],
+             ["website", "Website"]],
+    itineraries: [["name", "Name"], ["city", "City"]]
+  };
+
+  var lastDest = "";      /* what the user typed, for city matching */
+  var libDraft = null;    /* {type, id|null, item} while a form is open */
+  var libScroll = false;  /* bring a freshly opened form into view once */
+  var libReturn = "main"; /* which view the library was opened from */
+  var lastMerge = null;   /* {any:bool} — did the last render fold anything in */
+
+  function newId() {
+    return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  }
+  function emptyLib() {
+    return { hotels: [], restaurants: [], sights: [], itineraries: [] };
+  }
+
+  /* Anything unexpected in storage is dropped rather than trusted. */
+  function normalizeLib(parsed) {
+    var lib = emptyLib();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return lib;
+    LIB_TYPES.forEach(function (type) {
+      arr(parsed[type]).forEach(function (raw) {
+        var item = { id: txt(raw.id) || newId(), name: txt(raw.name), city: txt(raw.city) };
+        if (!item.name) return;
+        if (type === "itineraries") {
+          item.stops = arr(raw.stops).map(function (st) {
+            return { time: txt(st.time), name: txt(st.name), note: txt(st.note) };
+          }).filter(function (st) { return st.name; });
+        } else {
+          item.note = txt(raw.note);
+          item.website = txt(raw.website);
+          if (type === "hotels") item.price = txt(raw.price);
+          if (type === "restaurants") item.cuisine = txt(raw.cuisine);
+        }
+        lib[type].push(item);
+      });
+    });
+    return lib;
+  }
+  /* loadLib() substitutes an empty library when the stored value cannot be
+     read. That empty result must never be written back, or one unreadable
+     read would erase everything, so every read records WHY it was empty and
+     the write paths refuse to overwrite data they could not read. */
+  var libUnreadable = "";   /* "" when the read was clean */
+
+  function loadLib() {
+    var raw = null, parsed = null;
+    libUnreadable = "";
+    try { raw = localStorage.getItem(LIB_KEY); }
+    catch (e) {
+      libUnreadable = "this browser would not let the page read its storage";
+      return emptyLib();
+    }
+    if (!raw) return emptyLib();          /* genuinely empty: safe to write */
+    try { parsed = JSON.parse(raw); }
+    catch (e) {
+      libUnreadable = "the saved data is there but is not readable JSON";
+      return emptyLib();
+    }
+    return normalizeLib(parsed);
+  }
+
+  /* Read straight back out of localStorage. "" when the library is
+     readable; the honest description of the trouble when it is not. */
+  function storedNow() {
+    var raw = null;
+    try { raw = localStorage.getItem(LIB_KEY); }
+    catch (e) {
+      return "Cannot read localStorage in this browser (" +
+             ((e && e.name) || "error") + ").";
+    }
+    if (raw === null) return "";
+    try { JSON.parse(raw); }
+    catch (e) {
+      return "\u201ctravel_library\u201d holds " + raw.length +
+             " characters that will not parse \u2014 nothing was overwritten.";
+    }
+    return "";
+  }
+  function saveLib(lib) {
+    try { localStorage.setItem(LIB_KEY, JSON.stringify(lib)); return true; }
+    catch (e) { return false; }
+  }
+
+  /* ---------- recovery from the last published copy ----------
+     An app-data wipe empties localStorage, but shared/data.js still holds
+     whatever was published last. That file is used as a safety copy and
+     nothing more: it is read ONLY when this device has no library at all,
+     it is never merged into a library that has items, and every step is
+     wrapped so a missing, stale or broken file leaves the app exactly as it
+     would have opened without it. */
+
+  function libCount(lib) {
+    return LIB_TYPES.reduce(function (n, t) { return n + arr(lib[t]).length; }, 0);
+  }
+
+  /* true only when storage was read cleanly AND holds nothing usable.
+     A read that fails, or JSON that will not parse, answers false: those
+     are the cases where restoring could overwrite data still sitting
+     there, and the rest of this file already refuses to write over them. */
+  function libSlotIsEmpty() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(LIB_KEY); }
+    catch (e) { return false; }
+    if (raw === null || raw === "") return true;      /* missing */
+    try { parsed = JSON.parse(raw); }
+    catch (e) { return false; }
+    return libCount(normalizeLib(parsed)) === 0;      /* present but empty */
+  }
+
+  /* shared/data.js assigns a global, so it is loaded the way the browser
+     loads any script: no eval, no hand-parsing. Relative path, so this
+     works from a GitHub Pages subpath and from a file:// copy. */
+  function fetchSharedLibrary(done) {
+    var settled = false, el = null, timer = null;
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch (e) {}
+      try { done(value); } catch (e) {}
+    }
+    try {
+      el = document.createElement("script");
+      el.src = "./shared/data.js";
+      el.async = true;
+      el.onload = function () {
+        var got = null;
+        try { got = window.SHARED_LIBRARY; } catch (e) { got = null; }
+        finish(got);
+      };
+      el.onerror = function () { finish(null); };
+      timer = setTimeout(function () { finish(null); }, 8000);
+      (document.head || document.documentElement).appendChild(el);
+    } catch (e) { finish(null); }
+  }
+
+  /* One load of shared/data.js per session, shared by the restore path and
+     by the unpublished-changes check below, so opening the app never asks
+     for that file twice. sharedState: 0 idle, 1 loading, 2 settled. */
+  var sharedState = 0, sharedValue = null, sharedWaiting = [];
+  function withSharedLibrary(done) {
+    if (sharedState === 2) { try { done(sharedValue); } catch (e) {} return; }
+    sharedWaiting.push(done);
+    if (sharedState === 1) return;
+    sharedState = 1;
+    fetchSharedLibrary(function (value) {
+      sharedState = 2;
+      sharedValue = value;
+      var waiting = sharedWaiting;
+      sharedWaiting = [];
+      waiting.forEach(function (cb) { try { cb(value); } catch (e) {} });
+    });
+  }
+
+  function restoreFromPublished() {
+    try {
+      if (!libSlotIsEmpty()) return;        /* local is the source of truth */
+      withSharedLibrary(function (shared) {
+        try {
+          if (!shared) return;                        /* absent or blocked */
+          var incoming = normalizeLib(shared);
+          if (libCount(incoming) === 0) return;       /* the empty seed */
+          if (!libSlotIsEmpty()) return;              /* something arrived meanwhile */
+          if (!saveLib(incoming)) return;             /* private mode: say nothing */
+          libDraft = null;
+          try { if (!$("library").hidden) renderLibrary(); } catch (e) {}
+          toast("Restored your library from your last publish.");
+        } catch (e) {}
+      });
+    } catch (e) {}
+  }
+  /* ---------- "you have unpublished changes" ----------
+     There is no server to ask, so the published state is simply whatever
+     shared/data.js holds right now: the file friends actually see. That is
+     the reference; "current" is this device's library plus its sources.
+
+     The comparison is SEMANTIC, not literal. Two libraries are the same
+     when they hold the same places with the same content, whatever order
+     they sit in and whatever internal ids they happen to carry. In
+     particular ids are NOT compared: they are minted locally, they differ
+     between devices, and normalizeLib mints a fresh random one for any
+     item stored without one -- so comparing them reported a change on
+     every single load. "updated" is not compared either: republishing on a
+     new day is not a change.
+
+     Every path fails silent. If the file cannot be read, or storage cannot
+     be read, publishedRef stays null and NO banner appears: a false alarm
+     ("publish again") is worse than no alarm at all. */
+
+  var SRC_KEY = "travel_sources";
+  var publishedRef = null;   /* canonical string of the published copy; null = unknown */
+  var publishedLib = null;   /* the published copy itself, for the debug line */
+  var publishedSources = [];
+  var publishedOn = "";      /* the "updated" stamp of the copy we compared against */
+  var pubwarnOff = false;    /* dismissed, for this session only */
+  var pubwarnWhy = "";       /* DEBUG -- why we think there are changes */
+
+  /* JSON with object keys in a fixed order, so two objects holding the same
+     values compare equal however they were built. */
+  function stable(v) {
+    if (v === undefined) return "null";
+    if (v === null || typeof v !== "object") return JSON.stringify(v);
+    if (Array.isArray(v)) return "[" + v.map(stable).join(",") + "]";
+    return "{" + Object.keys(v).sort().map(function (k) {
+      return JSON.stringify(k) + ":" + stable(v[k]);
+    }).join(",") + "}";
+  }
+
+  /* The fields that actually mean something to a reader, per type. The id
+     is deliberately absent from every one of these. */
+  var CMP_FIELDS = {
+    hotels: ["name", "city", "note", "website", "price"],
+    restaurants: ["name", "city", "cuisine", "note", "website"],
+    sights: ["name", "city", "note", "website"],
+    itineraries: ["name", "city"]
+  };
+
+  /* One item reduced to its meaning. txt() turns a missing field and an
+     empty one into the same "", so "no note" and note:"" compare equal. */
+  function cmpItem(type, raw) {
+    var rec = {};
+    CMP_FIELDS[type].forEach(function (f) { rec[f] = txt(raw && raw[f]); });
+    if (type === "itineraries") {
+      /* a stop's position is part of what an itinerary says, so stops keep
+         their order and are compared as a list, not a set */
+      rec.stops = arr(raw && raw.stops).map(function (st) {
+        return { time: txt(st.time), name: txt(st.name), note: txt(st.note) };
+      }).filter(function (st) { return st.name; });
+    }
+    return rec;
+  }
+
+  /* Sorted by name+city so the two sides line up regardless of the order
+     items were added in; the canonical string breaks ties, so the order is
+     total and identical for identical content. fold() is used for the sort
+     key only -- never for equality, or a genuine capitalisation edit would
+     go unnoticed. */
+  function cmpList(lib, type) {
+    return arr(lib && lib[type]).map(function (raw) {
+      var rec = cmpItem(type, raw);
+      var s = stable(rec);
+      return { key: fold(rec.name) + " " + fold(rec.city) + " " + s,
+               rec: rec, str: s };
+    }).sort(function (a, b) {
+      return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
+    });
+  }
+
+  /* Sources are compared as a sorted list of canonical strings. A missing
+     list is an empty list on either side. */
+  function normalizeSources(v) {
+    if (!Array.isArray(v)) return [];
+    return v.map(function (s) {
+      if (s === null || s === undefined) return "";
+      if (typeof s === "object") return stable(s);
+      return String(s).trim();
+    }).filter(function (s) { return s; }).sort();
+  }
+
+  /* [] when there are none, null when storage would not give an answer. */
+  function loadSources() {
+    var raw = null, parsed = null;
+    try { raw = localStorage.getItem(SRC_KEY); }
+    catch (e) { return null; }
+    if (raw === null || raw === "") return [];
+    try { parsed = JSON.parse(raw); }
+    catch (e) { return null; }
+    return normalizeSources(parsed);
+  }
+
+  function canonicalState(lib, sources) {
+    var byType = {};
+    LIB_TYPES.forEach(function (type) {
+      byType[type] = cmpList(lib, type).map(function (e) { return e.str; });
+    });
+    return stable({ lib: byType, sources: normalizeSources(sources) });
+  }
+
+  /* ---------- DEBUG (temporary: this function, the two <p class="pubwarn-why">
+     elements and the three lines marked DEBUG below can all be deleted) --
+     says WHICH type, item and field disagrees, so a false positive can be
+     read straight off the screen instead of guessed at. */
+  function diffWhy(lib, sources) {
+    var out = [];
+    LIB_TYPES.forEach(function (type) {
+      var a = cmpList(lib, type), b = cmpList(publishedLib, type);
+      var counts = " (count " + a.length + " vs " + b.length;
+      if (a.length !== b.length) { out.push(type + counts + ")"); return; }
+      for (var i = 0; i < a.length; i++) {
+        if (a[i].str === b[i].str) continue;
+        var an = a[i].rec.name;
+        if (fold(an) !== fold(b[i].rec.name)) {
+          out.push(type + counts + ", “" + an +
+                   "” is not in the published copy)");
+          return;
+        }
+        var field = "";
+        CMP_FIELDS[type].concat(type === "itineraries" ? ["stops"] : [])
+          .forEach(function (f) {
+            if (!field && stable(a[i].rec[f]) !== stable(b[i].rec[f])) field = f;
+          });
+        out.push(type + counts + ", item “" + an +
+                 "” differs on field “" + (field || "?") + "”)");
+        return;
+      }
+    });
+    var sa = normalizeSources(sources);
+    if (stable(sa) !== stable(publishedSources)) {
+      out.push("sources (count " + sa.length + " vs " + publishedSources.length + ")");
+    }
+    return out.length ? "changed: " + out.join("; ") : "changed: nothing found";
+  }
+
+  function pubwarnShow(on) {
+    ["pubwarn-main", "pubwarn-lib"].forEach(function (id) {
+      var el = $(id);
+      if (el) el.hidden = !on;
+    });
+    /* DEBUG -- the same reason under both banners */
+    ["pubwarn-main-why", "pubwarn-lib-why"].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.textContent = on ? pubwarnWhy : "";
+      el.hidden = !(on && pubwarnWhy);
+    });
+  }
+
+  /* Cheap, and safe to call as often as it takes: run it after anything
+     that could change the library or the sources. */
+  function updateUnpublished() {
+    try {
+      if (pubwarnOff || publishedRef === null) { pubwarnShow(false); return; }
+      var lib = loadLib();
+      if (libUnreadable) { pubwarnShow(false); return; }   /* nothing to compare */
+      var sources = loadSources();
+      if (sources === null) { pubwarnShow(false); return; }
+      var changed = canonicalState(lib, sources) !== publishedRef;
+      /* DEBUG */
+      pubwarnWhy = changed
+        ? diffWhy(lib, sources) +
+          " [published copy dated " + (publishedOn || "?") + "]"
+        : "";
+      try {
+        if (window.console && console.log) {
+          console.log("[unpublished] " + (changed ? pubwarnWhy : "no changes"));
+        }
+      } catch (e) {}
+      pubwarnShow(changed);
+    } catch (e) {
+      try { pubwarnShow(false); } catch (err) {}
+    }
+  }
+
+  /* Read the published copy once per load, then compare. Reopening the app
+     after a publish + push refetches it, finds the two sides equal again,
+     and the banner is gone on its own -- nothing watches for the push. */
+  function loadPublishedRef() {
+    try {
+      withSharedLibrary(function (shared) {
+        try {
+          if (shared && typeof shared === "object" && !Array.isArray(shared)) {
+            publishedLib = normalizeLib(shared);
+            publishedSources = normalizeSources(shared.sources);
+            publishedOn = txt(shared.updated);
+            publishedRef = canonicalState(publishedLib, publishedSources);
+          } else {
+            /* DEBUG */
+            try {
+              if (window.console && console.log) {
+                console.log("[unpublished] shared/data.js unreadable - no banner");
+              }
+            } catch (e2) {}
+          }
+        } catch (e) { publishedRef = null; }
+        updateUnpublished();
+      });
+    } catch (e) {}
+  }
+  function blankItem(type) {
+    var item = { id: "", name: "", city: "" };
+    if (type === "itineraries") { item.stops = [{ time: "", name: "", note: "" }]; }
+    else {
+      item.note = ""; item.website = "";
+      if (type === "hotels") item.price = "";
+      if (type === "restaurants") item.cuisine = "";
+    }
+    return item;
+  }
+
+  /* ---------- library view ---------- */
+  function libFormHtml(draft) {
+    var it = draft.item;
+    var h = '<form class="lib-form" id="lib-form" novalidate>';
+    LIB_FIELDS[draft.type].forEach(function (f) {
+      var val = esc(it[f[0]] || "");
+      h += '<label class="field"><span class="label">' + esc(f[1]) + "</span>" +
+        (f[2] ? '<textarea data-f="' + f[0] + '" rows="2">' + val + "</textarea>"
+              : '<input type="text" data-f="' + f[0] + '" value="' + val + '">') +
+        "</label>";
+    });
+    if (draft.type === "itineraries") {
+      h += '<span class="label">Stops</span>';
+      arr(it.stops).forEach(function (st, i) {
+        h += '<div class="stoprow">' +
+          '<input type="text" data-s="time" data-i="' + i + '" placeholder="Time" value="' + esc(st.time) + '">' +
+          '<input type="text" data-s="name" data-i="' + i + '" placeholder="Place" value="' + esc(st.name) + '">' +
+          '<input type="text" data-s="note" data-i="' + i + '" placeholder="Note" value="' + esc(st.note) + '">' +
+          '<button class="btn btn--sm" type="button" data-lib="stop-del" data-i="' + i + '">Remove</button>' +
+          "</div>";
+      });
+      h += '<button class="btn btn--sm" type="button" data-lib="stop-add">Add stop</button>';
+    }
+    h += '<div class="actions form-actions">' +
+      '<button class="btn-solid btn-inline" type="button" data-lib="save">Save</button>' +
+      '<button class="btn" type="button" data-lib="cancel">Cancel</button></div>' +
+      '<p class="lib-msg" id="lib-form-msg" hidden></p>' +
+      (storedNow() ? '<p class="stored-now">' + esc(storedNow()) + "</p>" : "") +
+      "</form>";
+    return h;
+  }
+
+  function libCardHtml(type, it) {
+    var meta = [txt(it.city), txt(it.cuisine)].filter(function (x) { return x; }).join(" \u00b7 ");
+    var detail;
+    if (type === "itineraries") {
+      var names = arr(it.stops).map(function (st) { return txt(st.name); })
+                               .filter(function (n) { return n; });
+      detail = names.length
+        ? names.length + (names.length === 1 ? " stop: " : " stops: ") + names.join(" \u2192 ")
+        : "No stops yet.";
+    } else {
+      detail = txt(it.note);
+    }
+    return '<article class="card">' +
+      '<h3 class="card-name">' + esc(it.name) + "</h3>" +
+      (meta ? '<p class="card-meta">' + esc(meta) + "</p>" : "") +
+      (txt(it.price) ? '<p class="price">' + esc(it.price) + "</p>" : "") +
+      (detail ? '<p class="card-note">' + esc(detail) + "</p>" : "") +
+      '<div class="actions">' +
+        '<button class="btn btn--sm" type="button" data-lib="edit" data-type="' + type +
+          '" data-id="' + esc(it.id) + '">Edit</button>' +
+        '<button class="btn btn--sm" type="button" data-lib="delete" data-type="' + type +
+          '" data-id="' + esc(it.id) + '">Delete</button>' +
+      "</div></article>";
+  }
+
+  function renderLibrary() {
+    var lib = loadLib();
+    var html = "";
+    LIB_TYPES.forEach(function (type) {
+      var items = lib[type];
+      var body = "";
+      if (libDraft && libDraft.type === type) body += libFormHtml(libDraft);
+      body += items.length
+        ? '<div class="grid">' + items.map(function (it) {
+            return libCardHtml(type, it);
+          }).join("") + "</div>"
+        : '<p class="empty">Nothing saved yet.</p>';
+      body += '<div class="actions" style="margin-top:18px">' +
+        '<button class="btn" type="button" data-lib="add" data-type="' + type + '">Add ' +
+        esc(LIB_ONE[type]) + "</button></div>";
+      html += section("lib-" + type, LIB_TITLE[type],
+                      items.length + " saved", body);
+    });
+    $("lib-list").innerHTML = html;
+    bindLibControls();
+    var libTrouble = storedNow();
+    $("lib-stored").textContent = libTrouble;
+    $("lib-stored").hidden = !libTrouble;
+    /* an open publish panel must never show a library that has moved on */
+    if (!$("pub-panel").hidden) fillPublish();
+    try { $("lib-export").value = JSON.stringify(lib, null, 2); }
+    catch (e) { $("lib-export").value = ""; }
+
+    /* every add, edit, delete and import lands here, so this is the one
+       place the banner has to be recomputed from. Anything that changes
+       the sources list must call updateUnpublished() too. */
+    updateUnpublished();
+
+    /* A form opened from a section further down would otherwise be off-screen. */
+    if (libScroll) {
+      libScroll = false;
+      var form = $("lib-form");
+      if (form && form.scrollIntoView) form.scrollIntoView({ block: "center" });
+    }
+  }
+
+  /* Every control gets its own handler after each render. Nothing here
+     relies on events bubbling out of markup that innerHTML just replaced,
+     and the form has no submit button, so a tap can never navigate the page. */
+  function bindLibControls() {
+    var host = $("lib-list");
+    var btns = host.querySelectorAll("[data-lib]");
+    Array.prototype.forEach.call(btns, function (btn) {
+      btn.onclick = function () {
+        libAction(btn.getAttribute("data-lib"), btn);
+        return false;
+      };
+    });
+    var form = $("lib-form");
+    if (form) {
+      /* belt and braces: if a stray Enter still submits, save, never navigate */
+      form.onsubmit = function (e) {
+        if (e && e.preventDefault) e.preventDefault();
+        saveDraft();
+        return false;
+      };
+    }
+  }
+
+  function libAction(act, btn) {
+    var type = btn.getAttribute("data-type");
+    var id = btn.getAttribute("data-id");
+
+    if (act === "save") {
+      saveDraft();
+    } else if (act === "add") {
+      libDraft = { type: type, id: null, item: blankItem(type) };
+      libScroll = true;
+      renderLibrary();
+    } else if (act === "edit") {
+      var lib = loadLib(), match = null;
+      lib[type].forEach(function (it) { if (it.id === id) match = it; });
+      if (!match) return;
+      libDraft = { type: type, id: id, item: match };
+      libScroll = true;
+      renderLibrary();
+    } else if (act === "delete") {
+      if (window.confirm("Delete this saved item?")) deleteLibItem(type, id);
+    } else if (act === "cancel") {
+      libDraft = null;
+      renderLibrary();
+    } else if (act === "stop-add") {
+      readLibForm();
+      if (!libDraft) return;
+      libDraft.item.stops = arr(libDraft.item.stops);
+      libDraft.item.stops.push({ time: "", name: "", note: "" });
+      renderLibrary();
+    } else if (act === "stop-del") {
+      readLibForm();
+      if (!libDraft) return;
+      var i = parseInt(btn.getAttribute("data-i"), 10);
+      libDraft.item.stops = arr(libDraft.item.stops);
+      if (!isNaN(i)) libDraft.item.stops.splice(i, 1);
+      if (!libDraft.item.stops.length) libDraft.item.stops.push({ time: "", name: "", note: "" });
+      renderLibrary();
+    }
+  }
+
+  /* Pull whatever is currently typed back into the draft, so a re-render
+     (adding or removing a stop row) never loses it. */
+  function readLibForm() {
+    if (!libDraft) return;
+    var form = $("lib-form");
+    if (!form) return;
+    Array.prototype.forEach.call(form.querySelectorAll("[data-f]"), function (el) {
+      var f = el.getAttribute("data-f");
+      libDraft.item[f] = f === "website" ? cleanWebsite(el.value) : el.value.trim();
+    });
+    if (libDraft.type === "itineraries") {
+      var stops = arr(libDraft.item.stops);
+      Array.prototype.forEach.call(form.querySelectorAll("[data-s]"), function (el) {
+        var i = parseInt(el.getAttribute("data-i"), 10);
+        if (isNaN(i)) return;
+        if (!stops[i]) stops[i] = { time: "", name: "", note: "" };
+        stops[i][el.getAttribute("data-s")] = el.value.trim();
+      });
+      libDraft.item.stops = stops;
+    }
+  }
+
+  function libFormError(msg) {
+    var el = $("lib-form-msg");
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function saveDraft() {
+    readLibForm();
+    if (!libDraft) return;
+    var item = libDraft.item;
+    if (!txt(item.name)) { libFormError("Give it a name first."); return; }
+    if (libDraft.type === "itineraries") {
+      item.stops = arr(item.stops).filter(function (st) { return txt(st.name); });
+      if (!item.stops.length) { libFormError("Add at least one stop with a name."); return; }
+    }
+    var lib = loadLib();
+    if (libUnreadable) {
+      libFormError("Nothing was changed \u2014 " + libUnreadable +
+                   ". Copy it out under Backup before saving over it.");
+      return;
+    }
+    var list = lib[libDraft.type];
+    if (libDraft.id) {
+      var found = false;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].id === libDraft.id) { item.id = libDraft.id; list[i] = item; found = true; break; }
+      }
+      if (!found) { item.id = libDraft.id; list.push(item); }
+    } else {
+      item.id = newId();
+      list.push(item);
+    }
+    if (!saveLib(lib)) { libFormError("This browser refused to save (private mode?)."); return; }
+    libDraft = null;
+    renderLibrary();
+  }
+
+  function deleteLibItem(type, id) {
+    var lib = loadLib();
+    if (libUnreadable) return;   /* never delete out of data we could not read */
+    var keep = lib[type].filter(function (it) { return it.id !== id; });
+    if (keep.length === lib[type].length) return;
+    lib[type] = keep;
+    saveLib(lib);
+    if (libDraft && libDraft.type === type && libDraft.id === id) libDraft = null;
+    renderLibrary();
+  }
+
+  function libBackupMsg(msg) {
+    var el = $("lib-backup-msg");
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  /* ---------- library inside a generated trip ---------- */
+
+  /* Lowercase, strip accents, and reduce every run of punctuation or
+     whitespace to a single space, so "  Zürich " and "Zurich," compare equal. */
+  function fold(v) {
+    var out = txt(v).toLowerCase();
+    if (out.normalize) {
+      try { out = out.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {}
+    }
+    return out.replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  /* "Lisbon, Portugal" -> ["lisbon", "portugal"], so a city saved with its
+     country still matches a destination that names only the city. */
+  function cityParts(city) {
+    return txt(city).split(/[,;\/|\u2013\u2014-]+/).map(fold)
+                    .filter(function (part) { return part; });
+  }
+  /* The rule, in order:
+       1. the trimmed, lowercased city appears anywhere in the trimmed,
+          lowercased destination text  ("Lisbon" in "Lisbon, 1 day"), then
+       2. the same test on folded text, per comma-separated part, so
+          "St. Ives" still matches "St Ives" and "Lisbon, Portugal" still
+          matches a destination that names only the city.
+     Returns why, so the debug panel can explain every decision.
+     plainDest is lowercased/trimmed raw text; haystack is folded. */
+  function cityCheck(city, haystack, plainDest) {
+    var raw = txt(city);
+    if (!raw) {
+      return { matched: false, why: "no city saved \u2014 it can never match" };
+    }
+    var plainCity = raw.toLowerCase();
+    if (plainDest.indexOf(plainCity) !== -1) {
+      return { matched: true, why: '"' + plainCity + '" is inside "' + plainDest + '"' };
+    }
+    var parts = cityParts(raw);
+    var padded = " " + haystack + " ";
+    for (var i = 0; i < parts.length; i++) {
+      if (padded.indexOf(" " + parts[i] + " ") !== -1) {
+        return { matched: true, why: '"' + parts[i] + '" matches a word in "' + haystack + '"' };
+      }
+    }
+    return { matched: false, why: '"' + plainCity + '" is not in "' + plainDest + '"' };
+  }
+  function cityMatches(city, haystack, plainDest) {
+    return cityCheck(city, haystack, plainDest).matched;
+  }
+  /* name + city, so a saved place maps correctly even in a multi-city trip. */
+  function libMaps(name, city) {
+    var n = txt(name);
+    if (!n) return "";
+    return "https://www.google.com/maps/search/?api=1&query=" +
+           plus(city ? n + " " + city : n);
+  }
+
+  function mergeLibrary(trip) {
+    var lib = loadLib();   /* read fresh from storage on every render */
+
+    /* Match against the model's destination AND what the user typed — the
+       two usually agree, so identical text is only kept once. */
+    var pieces = [];
+    [txt(trip.destination), lastDest].forEach(function (v) {
+      var f = fold(v);
+      if (f && pieces.indexOf(f) === -1) pieces.push(f);
+    });
+    var hay = pieces.join(" ");
+
+    /* the same two destination strings, lowercased but otherwise untouched */
+    var plainPieces = [];
+    [txt(trip.destination), txt(lastDest)].forEach(function (v) {
+      var t = v.toLowerCase().trim();
+      if (t && plainPieces.indexOf(t) === -1) plainPieces.push(t);
+    });
+    var plainDest = plainPieces.join(" ");
+
+    lastMerge = { any: false };
+    function forCity(type) {
+      var hits = [];
+      lib[type].forEach(function (it) {
+        if (cityCheck(it.city, hay, plainDest).matched) hits.push(it);
+      });
+      if (hits.length) lastMerge.any = true;
+      return hits;
+    }
+
+    trip.hotels = forCity("hotels").map(function (h) {
+      return { name: h.name, why: h.note, price: h.price, website: h.website,
+               maps: libMaps(h.name, h.city), saved: true };
+    }).concat(arr(trip.hotels));
+
+    trip.restaurants = forCity("restaurants").map(function (r) {
+      return { name: r.name, cuisine: r.cuisine, note: r.note, website: r.website,
+               maps: libMaps(r.name, r.city), saved: true };
+    }).concat(arr(trip.restaurants));
+
+    trip.sights = forCity("sights").map(function (g) {
+      return { name: g.name, note: g.note, website: g.website,
+               maps: libMaps(g.name, g.city), saved: true };
+    }).concat(arr(trip.sights));
+
+    trip.itineraries = forCity("itineraries").map(function (it) {
+      return {
+        name: "\u2605 " + txt(it.name),
+        saved: true,
+        days: [{
+          day: 1,
+          stops: arr(it.stops).filter(function (st) { return txt(st.name); })
+                              .map(function (st) {
+            return { time: st.time, name: st.name, note: st.note,
+                     website: "", maps: libMaps(st.name, it.city) };
+          })
+        }]
+      };
+    }).filter(function (it) {
+      return it.days[0].stops.length;
+    }).concat(arr(trip.itineraries));
+
+    return trip;
+  }
+
+  /* ---------- publish for friends ----------
+     The page cannot write files in the repo, so publishing is copy and
+     paste: this builds the exact text of shared/data.js and the user pastes
+     it over that file, commits and pushes. Nothing is sent anywhere. */
+  function todayISO() {
+    var d = new Date();
+    function two(n) { return (n < 10 ? "0" : "") + n; }
+    return d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate());
+  }
+
+  function publishText() {
+    var lib = loadLib();
+    if (libUnreadable) return "";       /* never publish over data we could not read */
+    var snapshot = {
+      hotels: lib.hotels,
+      restaurants: lib.restaurants,
+      sights: lib.sights,
+      itineraries: lib.itineraries,
+      updated: todayISO()
+    };
+    return "window.SHARED_LIBRARY = " + JSON.stringify(snapshot, null, 2) + ";";
+  }
+
+  function pubMsg(msg) {
+    var el = $("pub-msg");
+    el.textContent = msg;
+    el.hidden = !msg;
+  }
+
+  function fillPublish() {
+    var text = publishText();
+    if (!text) {
+      $("pub-out").value = "";
+      $("pub-panel").hidden = true;
+      pubMsg("Nothing was published \u2014 " + libUnreadable +
+             ". Copy it out under Backup first.");
+      return false;
+    }
+    $("pub-out").value = text;
+    $("pub-panel").hidden = false;
+    return true;
+  }
+
+  /* ---------- favorites view ---------- */
+  var favReturn = "main";   /* which view Favorites was opened from */
+
+  function favMapsUrl(f) {
+    var direct = url(f.maps);
+    if (direct) return direct;
+    var built = libMaps(f.name, f.city);
+    return built ? esc(built) : "";
+  }
+
+  function favCardHtml(f) {
+    var vote = getVote(f.type, f.name, f.city);
+    var meta = [txt(f.city), FB_ONE[f.type] || txt(f.type)]
+      .filter(function (x) { return x; }).join(" \u00b7 ");
+    return '<article class="card">' +
+      '<h3 class="card-name">' + esc(f.name) + "</h3>" +
+      (meta ? '<p class="card-meta">' + esc(meta) + "</p>" : "") +
+      (vote ? '<p class="downnote">you ' +
+              (vote === "up" ? "upvoted" : "downvoted") + " this</p>" : "") +
+      (txt(f.note) ? '<p class="card-note">' + esc(f.note) + "</p>" : "") +
+      '<div class="actions">' +
+        link(url(f.website), "Website", true) +
+        link(favMapsUrl(f), "Map", true) +
+        '<button class="btn btn--sm" type="button" data-fav="unfav" data-key="' +
+          esc(fbKey(f.type, f.city, f.name)) + '">Unfavorite</button>' +
+      "</div></article>";
+  }
+
+  function renderFavorites() {
+    var favs = loadFavorites();
+    var html = "";
+    FB_ORDER.forEach(function (type) {
+      var items = favs.filter(function (f) { return f.type === type; });
+      var body = items.length
+        ? '<div class="grid">' + items.map(function (f) { return favCardHtml(f); }).join("") + "</div>"
+        : '<p class="empty">Nothing hearted yet.</p>';
+      html += section("fav-" + type, FB_TITLE[type], items.length + " saved", body);
+    });
+    var other = favs.filter(function (f) { return FB_ORDER.indexOf(f.type) === -1; });
+    if (other.length) {
+      html += section("fav-other", "Other", other.length + " saved",
+        '<div class="grid">' + other.map(function (f) { return favCardHtml(f); }).join("") + "</div>");
+    }
+    $("fav-list").innerHTML = html;
+    bindFavControls();
+    var trouble = favUnreadable
+      ? favUnreadable + " \u2014 nothing was overwritten."
+      : storageTrouble();
+    $("fav-stored").textContent = trouble;
+    $("fav-stored").hidden = !trouble;
+  }
+
+  /* Same rule as everywhere else here: a handler per button, set on the
+     button itself, right after the markup that holds it was written. */
+  function bindFavControls() {
+    var host = $("fav-list");
+    Array.prototype.forEach.call(host.querySelectorAll("[data-fav]"), function (btn) {
+      btn.onclick = function () {
+        if (btn.getAttribute("data-fav") === "unfav") {
+          removeFavoriteByKey(btn.getAttribute("data-key"));
+          renderFavorites();
+          toast(storageTrouble() || "Saved \u2713");
+        }
+        return false;
+      };
+    });
+  }
+
+  function openFavorites(from) {
+    favReturn = from;
+    $("fav-back").textContent =
+      from === "result" ? "\u2190 Back to the trip" : "\u2190 Back to planner";
+    renderFavorites();
+    show("favorites");
+  }
+
+  /* ---------- wiring ---------- */
+  $("setup-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = $("key-input").value.trim();
+    var errEl = $("setup-err");
+    if (!v) {
+      errEl.textContent = "Paste a key first.";
+      errEl.hidden = false;
+      return;
+    }
+    if (!setKey(v)) {
+      errEl.textContent = "This browser refused to store the password (private mode?).";
+      errEl.hidden = false;
+      return;
+    }
+    errEl.hidden = true;
+    $("key-input").value = "";
+    show("main");
+  });
+
+  $("trip-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var dest = $("dest-input").value.trim();
+    if (!dest) return;
+    lastDest = dest;
+    $("dest-input").blur();
+    planTrip(dest);
+  });
+
+  $("change-key").addEventListener("click", function () {
+    clearKey();
+    $("key-input").value = "";
+    $("setup-err").hidden = true;
+    show("setup");
+  });
+
+  /* The library is reachable from the planner and from a finished brief;
+     "back" returns to whichever one you came from. */
+  function openLibrary(from) {
+    libReturn = from;
+    libDraft = null;
+    libBackupMsg("");
+    $("pub-panel").hidden = true;
+    $("pub-out").value = "";
+    pubMsg("");
+    $("lib-import").value = "";
+    $("lib-back").textContent =
+      from === "result" ? "← Back to the trip" : "← Back to planner";
+    renderLibrary();          /* also refreshes the "Stored now" line */
+    show("library");
+  }
+  $("open-lib").addEventListener("click", function () { openLibrary("main"); });
+  $("open-fav").addEventListener("click", function () { openFavorites("main"); });
+  $("r-fav").addEventListener("click", function () { openFavorites("result"); });
+  $("fav-back").addEventListener("click", function () {
+    show(favReturn === "result" ? "result" : "main");
+  });
+  $("fav-clear").addEventListener("click", function () {
+    if (!window.confirm("Clear every favorite and every thumbs up or down on this device?")) return;
+    try {
+      localStorage.removeItem(FAV_KEY);
+      localStorage.removeItem(FB_KEY);
+    } catch (e) {}
+    renderFavorites();
+    toast(storageTrouble() || "Cleared \u2713");
+  });
+  $("r-lib").addEventListener("click", function () { openLibrary("result"); });
+  $("r-new").addEventListener("click", function () { show("main"); });
+  $("lib-back").addEventListener("click", function () {
+    libDraft = null;
+    show(libReturn === "result" ? "result" : "main");
+  });
+
+  /* Controls are bound directly in bindLibControls(). This only stops a
+     stray form submission from navigating the page away. */
+  $("lib-list").addEventListener("submit", function (e) {
+    if (e && e.preventDefault) e.preventDefault();
+  });
+
+  /* One copy routine for both textareas: the clipboard API where it exists,
+     and the old select-and-execCommand path where it does not. */
+  function copyTextarea(ta, done, failed) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(done, failed);
+      return;
+    }
+    try {
+      ta.removeAttribute("readonly");
+      ta.focus();
+      ta.setSelectionRange(0, ta.value.length);
+      document.execCommand("copy");
+      ta.setAttribute("readonly", "readonly");
+      done();
+    } catch (err) {
+      ta.setAttribute("readonly", "readonly");
+      failed();
+    }
+  }
+
+  $("lib-copy").addEventListener("click", function () {
+    copyTextarea($("lib-export"),
+      function () { libBackupMsg("Copied. Paste it somewhere safe."); },
+      function () { libBackupMsg("Could not copy — select the text and copy it by hand."); });
+  });
+
+  $("pub-make").addEventListener("click", function () {
+    pubMsg("");
+    if (fillPublish()) {
+      pubMsg("Ready \u2014 copy it, paste it over shared/data.js, then commit and push.");
+      var panel = $("pub-panel");
+      if (panel.scrollIntoView) panel.scrollIntoView({ block: "center" });
+    }
+  });
+
+  $("pub-copy").addEventListener("click", function () {
+    copyTextarea($("pub-out"),
+      function () { pubMsg("Copied. Now paste it over shared/data.js, save, commit and push."); },
+      function () { pubMsg("Could not copy \u2014 select the text and copy it by hand."); });
+  });
+
+  $("lib-load").addEventListener("click", function () {
+    var raw = $("lib-import").value.trim();
+    if (!raw) { libBackupMsg("Paste an exported library first."); return; }
+    var parsed = null;
+    try { parsed = JSON.parse(raw); } catch (err) { parsed = null; }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      libBackupMsg("That is not valid library JSON.");
+      return;
+    }
+    var incoming = normalizeLib(parsed);
+    var total = LIB_TYPES.reduce(function (n, t) { return n + incoming[t].length; }, 0);
+    if (!total) { libBackupMsg("No usable items found in that text."); return; }
+    if (!window.confirm("Replace your whole library with these " + total + " items?")) return;
+    if (!saveLib(incoming)) { libBackupMsg("This browser refused to save (private mode?)."); return; }
+    libDraft = null;
+    $("lib-import").value = "";
+    renderLibrary();
+    libBackupMsg("Library replaced — " + total + " items loaded.");
+  });
+
+  $("err-back").addEventListener("click", function () { show("main"); });
+  $("again").addEventListener("click", function () { show("main"); });
+
+  show(getKey() ? "main" : "setup");
+
+  ["pubwarn-main-x", "pubwarn-lib-x"].forEach(function (id) {
+    var btn = $(id);
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      pubwarnOff = true;          /* this session only; back on next load */
+      pubwarnShow(false);
+    });
+  });
+
+  /* Safety copy: only ever consulted when this device has no library. */
+  restoreFromPublished();
+
+  /* Same file, read once: the reference the banner compares against. */
+  loadPublishedRef();
+
+  /* service worker disabled in this restyled TEST copy */
+})();
+</script>
+</body>
+</html>
