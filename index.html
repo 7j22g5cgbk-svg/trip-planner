@@ -407,7 +407,7 @@
   .price{background:rgba(14,59,58,.07)}
   .tag{border-color:var(--accent-line)}
   /* card gets an image-style panel on top */
-  .card{padding:0;overflow:hidden}
+  .card--panel{padding:0;overflow:hidden}
   .card-stub{padding:14px 18px}
   .card-body{padding:20px;display:flex;flex-direction:column;flex:1}
   .thumb{height:150px;position:relative;overflow:hidden}
@@ -1029,7 +1029,7 @@
         '<button class="stub-show" type="button" data-fb="show">Show</button></p>' +
         "</article>";
     }
-    return '<article class="card" id="' + id + '">' +
+    return '<article class="card card--panel" id="' + id + '">' +
       motifFor(p.type) + '<div class="card-body">' +
       (c.saved ? '<div><span class="tag">\u2605 my saved place</span></div>' : "") +
       '<h3 class="card-name">' + esc(p.name) + "</h3>" +
