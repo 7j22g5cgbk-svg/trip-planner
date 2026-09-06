@@ -3,13 +3,14 @@
    and falls back to the last cached copy when offline. Replaces the old
    cache-first worker that made updates "stick" on the old version. */
 
-var CACHE = "trip-cache-v2026-09-06";
+var CACHE = "trip-cache-v2026-09-06b";
 var ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icon-180.png",
-  "./shared/data.js"
+  "./shared/data.js",
+  "./shared/maps-places.js"
 ];
 
 /* Install the new worker immediately, don't wait for old tabs to close. */

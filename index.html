@@ -626,6 +626,7 @@
 
 </div>
 
+<script src="./shared/maps-places.js"></script>
 <script>
 (function () {
   "use strict";
@@ -1302,23 +1303,75 @@
     return block;
   }
 
+  /* ---------- saved places from Google Maps ----------
+     shared/maps-places.js holds a Takeout export keyed by list name, which
+     is almost always a city. A trip matches when a key appears in what was
+     typed, so "Milan, 3 days" matches "milan"; the longest matching key
+     wins, so a specific list beats a broad one. The export carries a name,
+     a Maps link and sometimes a note - never a category - so these go over
+     as the traveller's own saved places and nothing more. Missing or broken
+     file: this returns "" and the prompt is exactly as it was before. */
+  var SAVED_MAX = 60;
+
+  function savedPlacesBlock(dest) {
+    var all = null;
+    try { all = window.MAPS_PLACES; } catch (e) { return ""; }
+    if (!all || typeof all !== "object") return "";
+
+    var hay = " " + txt(dest).toLowerCase() + " ";
+    var best = "";
+    Object.keys(all).forEach(function (k) {
+      if (hay.indexOf(k) !== -1 && k.length > best.length) best = k;
+    });
+    if (!best) return "";
+
+    /* the places carrying a note are the ones actually judged, so they go
+       first and survive the cap; the rest keep their saved order */
+    var list = arr(all[best]).slice().sort(function (a, b) {
+      return ((b && b.note) ? 1 : 0) - ((a && a.note) ? 1 : 0);
+    });
+
+    var out = [];
+    for (var i = 0; i < list.length && out.length < SAVED_MAX; i++) {
+      var pl = list[i], name = txt(pl && pl.n);
+      if (!name) continue;
+      var note = txt(pl && pl.note);
+      out.push(note ? name + " (" + note + ")" : name);
+    }
+    if (!out.length) return "";
+
+    return " MY OWN SAVED PLACES for this destination, taken from my Google Maps "
+         + "lists \u2014 I chose every one of these myself. Feature the ones that "
+         + "genuinely fit this trip, keep my wording where I left a note, and set "
+         + "saved=true on those. Do not feel obliged to use them all, and never "
+         + "invent a detail about one: " + out.join("; ") + ".";
+  }
+
   /* ---------- prompt ---------- */
   function buildPrompt(dest) {
     return "You are my personal travel researcher. Research " + dest +
       " using web search and build a travel brief. My taste: boutique, design-led hotels, " +
       "adults-only where possible, air conditioning and a pool preferred, fine dining and " +
-      "curated non-touristy spots. Return ONLY a JSON object (no prose, no code fences) with " +
+      "curated non-touristy spots. TRUSTED SOURCES \u2014 search these first and weight " +
+      "their recommendations far above general web results: Yolanda Edwards / Yolo " +
+      "Journal, Michelin Guide, Falstaff, New York Times Travel, Cond\u00e9 Nast " +
+      "Traveler, Forbes Travel, Bloomberg travel and luxury coverage, The Economist " +
+      "travel coverage. Never fabricate a source or claim one of these recommended a " +
+      "place unless the search actually showed it. " +
+      "Return ONLY a JSON object (no prose, no code fences) with " +
       "this shape: { destination, summary, hotels:[{name,why,price,website,maps}], " +
       "itineraries:[{name,days:[{day,stops:[{time,name,note,maps,website}],route_maps}]}] " +
       "(produce EXACTLY 3 genuinely different itineraries), " +
       "restaurants:[{name,cuisine,note,website,maps,saved}], sights:[{name,note,maps,website}] }. " +
       "Sights and stops must be REAL named places, never activities/meals. For " +
       "hotels/restaurants/sights/stops, use web search to find the official website and put the " +
-      "verified URL in website, else empty string. Set saved=false everywhere. " +
+      "verified URL in website, else empty string. Set saved=false except where " +
+      "the saved-places list below says otherwise. " +
       "Never invent places or links. HARD LIMITS: Output ONLY the JSON, nothing else. " +
       "EXACTLY 3 itineraries. summary: max 20 words. Every 'why', 'note', and 'cuisine' " +
       "field: max 12 words. Do NOT repeat disclaimer text in notes - if something is " +
       "unverified, write only 'unverified'. Keep the whole response as compact as possible." +
+      savedPlacesBlock(dest) +
       preferencesBlock();
   }
 
