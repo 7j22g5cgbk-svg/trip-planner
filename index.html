@@ -110,6 +110,19 @@
   }
   .linkish:hover{color:var(--accent)}
   .hint{font-size:13px;color:var(--muted);margin:10px 0 0;max-width:56ch}
+  /* Status of the saved Google places on THIS device. Monospace on purpose:
+     it reads as a machine reading out a fact, not as page copy. */
+  .places-status{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;line-height:1.5;letter-spacing:.02em;
+    color:var(--muted);margin:-6px 0 14px;
+  }
+  .places-status-bad{color:#A3341F;font-weight:600}
+  .buildtag{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11px;color:var(--muted);opacity:.7;
+    margin:22px 0 0;text-align:center;
+  }
 
   /* ---------- states ---------- */
   .state{padding:52px 0 0}
@@ -482,11 +495,13 @@
         <input type="text" id="dest-input" placeholder="Lisbon, 3 days"
                autocapitalize="words" autocorrect="off" enterkeyhint="go">
       </label>
+      <p class="places-status" id="places-status"></p>
       <button class="btn-solid" type="submit" id="go">Plan trip</button>
     </form>
     <button class="btn btn-block" type="button" id="open-lib">My Library</button>
     <button class="btn btn-block" type="button" id="open-fav">Favorites</button>
     <button class="linkish" type="button" id="change-key">Change or clear password</button>
+    <p class="buildtag" id="buildtag"></p>
   </div>
 
   <!-- ============ my library (on-device) ============ -->
@@ -640,6 +655,7 @@
   function show(name) {
     views.forEach(function (v) { $(v).hidden = (v !== name); });
     window.scrollTo(0, 0);
+    if (name === "main") { try { updatePlacesStatus(); } catch (e) {} }
     /* the unpublished-changes banner lives on two screens; keep both honest */
     try { updateUnpublished(); } catch (e) {}
   }
@@ -1313,21 +1329,39 @@
      file: this returns "" and the prompt is exactly as it was before. */
   var SAVED_MAX = 60;
 
-  function savedPlacesBlock(dest) {
+  /* Which list does this trip match? One source of truth, so the line on
+     screen and the list actually sent to the researcher can never disagree.
+     Returns null when the file did not load at all (that is the fault worth
+     showing), {key:"",list:[]} when it loaded but nothing matched. */
+  function savedPlacesMatch(dest) {
     var all = null;
-    try { all = window.MAPS_PLACES; } catch (e) { return ""; }
-    if (!all || typeof all !== "object") return "";
+    try { all = window.MAPS_PLACES; } catch (e) { return null; }
+    if (!all || typeof all !== "object") return null;
 
     var hay = " " + txt(dest).toLowerCase() + " ";
     var best = "";
     Object.keys(all).forEach(function (k) {
       if (hay.indexOf(k) !== -1 && k.length > best.length) best = k;
     });
-    if (!best) return "";
+    return { key: best, list: best ? arr(all[best]) : [] };
+  }
+
+  function savedPlacesTotals() {
+    var all = null;
+    try { all = window.MAPS_PLACES; } catch (e) { return null; }
+    if (!all || typeof all !== "object") return null;
+    var keys = Object.keys(all), n = 0;
+    keys.forEach(function (k) { n += arr(all[k]).length; });
+    return { lists: keys.length, places: n };
+  }
+
+  function savedPlacesBlock(dest) {
+    var m = savedPlacesMatch(dest);
+    if (!m || !m.key) return "";
 
     /* the places carrying a note are the ones actually judged, so they go
        first and survive the cap; the rest keep their saved order */
-    var list = arr(all[best]).slice().sort(function (a, b) {
+    var list = m.list.slice().sort(function (a, b) {
       return ((b && b.note) ? 1 : 0) - ((a && a.note) ? 1 : 0);
     });
 
@@ -1345,6 +1379,32 @@
          + "genuinely fit this trip, keep my wording where I left a note, and set "
          + "saved=true on those. Do not feel obliged to use them all, and never "
          + "invent a detail about one: " + out.join("; ") + ".";
+  }
+
+  /* Until now the saved places were invisible until a brief came back, so
+     there was no way to tell on a phone whether the file had loaded at all.
+     This says it out loud, before you press Plan. */
+  function updatePlacesStatus() {
+    var el = $("places-status");
+    if (!el) return;
+    var t = savedPlacesTotals();
+    if (!t) {
+      el.className = "places-status places-status-bad";
+      el.textContent = "Saved Google places NOT loaded on this device \u2014 close the app fully and reopen";
+      return;
+    }
+    el.className = "places-status";
+    var input = $("dest-input");
+    var m = savedPlacesMatch(input ? input.value : "");
+    if (m && m.key) {
+      var n = Math.min(m.list.length, SAVED_MAX);
+      var city = m.key.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); });
+      el.textContent = "\u2605 " + n + " of your saved " + city +
+                       " places go with this trip";
+    } else {
+      el.textContent = t.places + " saved Google places \u00b7 " + t.lists +
+                       " city lists ready";
+    }
   }
 
   /* ---------- prompt ---------- */
@@ -2381,6 +2441,8 @@
     show("main");
   });
 
+  $("dest-input").addEventListener("input", updatePlacesStatus);
+
   $("trip-form").addEventListener("submit", function (e) {
     e.preventDefault();
     var dest = $("dest-input").value.trim();
@@ -2521,9 +2583,35 @@
   /* Same file, read once: the reference the banner compares against. */
   loadPublishedRef();
 
+  /* Stamped so you can tell in one glance which version the phone is running.
+     If the phone shows an older date than the Mac, the phone is stale. */
+  var APP_BUILD = "2026-09-07";
+  try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
+
+  /* An iPhone home-screen app is resumed far more often than it is loaded, so
+     the browser rarely gets a chance to notice a new version and the app can
+     sit on old code for weeks. Ask for an update on load AND every time the
+     app comes back to the foreground; when a new worker takes over, reload
+     once (the guard stops a reload loop, and a first install never reloads). */
   if ("serviceWorker" in navigator) {
+    var swReloaded = false;
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (swReloaded || !hadController) return;
+      swReloaded = true;
+      window.location.reload();
+    });
+
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js");
+      navigator.serviceWorker.register("./sw.js").then(function (reg) {
+        var check = function () {
+          if (document.visibilityState === "visible") {
+            try { reg.update(); } catch (e) {}
+          }
+        };
+        document.addEventListener("visibilitychange", check);
+        check();
+      }).catch(function () {});
     });
   }
 })();

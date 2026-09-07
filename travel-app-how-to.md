@@ -129,6 +129,25 @@ Import**, paste the contents of `data.js` (the part inside the outer braces), ta
 
 ---
 
+## Checking the phone is current (30 seconds)
+
+Two things now tell you the truth on the phone itself, on the main screen:
+
+- **Under the Destination box** — a small grey line. With the box empty it reads
+  `496 saved Google places · 24 city lists ready`. Type `Milan` and it changes to
+  `★ 36 of your saved Milan places go with this trip`. That line IS the proof
+  Places is working — no need to plan a trip to find out.
+  If it reads **"Saved Google places NOT loaded on this device"** in red, the
+  phone is running old code. Close the app fully (swipe it away) and reopen.
+- **At the bottom** — `build 2026-09-07`. If the Mac shows a newer date than the
+  phone, the phone is stale.
+
+The app now also checks for a new version every time you bring it back to the
+foreground, and reloads itself once when it finds one. So being stuck on an old
+version should stop happening.
+
+---
+
 ## Forcing the newest version (iPhone)
 
 Normally unnecessary — the app updates itself. If it ever seems stuck:
