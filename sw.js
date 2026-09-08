@@ -3,7 +3,7 @@
    and falls back to the last cached copy when offline. Replaces the old
    cache-first worker that made updates "stick" on the old version. */
 
-var CACHE = "trip-cache-v2026-09-07a";
+var CACHE = "trip-cache-v2026-09-08b";
 var ASSETS = [
   "./",
   "./index.html",

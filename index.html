@@ -1435,6 +1435,94 @@
       preferencesBlock();
   }
 
+  /* ---------- reading the reply ----------
+     The Worker can answer in either of two shapes and this page handles both:
+
+       1. one buffered JSON object  (the old way), or
+       2. an SSE stream, content-type text/event-stream  (the fix).
+
+     Shape 2 exists because Cloudflare cuts any connection that goes ~100
+     seconds without a byte moving and the browser then shows a bare
+     "HTTP 524". A stream keeps dribbling tokens, so the clock never runs
+     out. Both shapes end up as the same message object, so every line of
+     the handling code below is shared. */
+
+  /* Nothing heard for this long -> give up with a readable message instead
+     of letting Cloudflare hand back a 524. While a stream is arriving the
+     clock is restarted on every chunk, so a long trip is never cut off. */
+  var REQUEST_TIMEOUT_MS = 95000;
+
+  function readSse(res, bump) {
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
+    var buf = "";
+    var blocks = [];                       /* content blocks, keyed by index */
+    var msg = { content: [], stop_reason: null };
+    var streamError = null;
+
+    function handle(payload) {
+      var ev = null;
+      try { ev = JSON.parse(payload); } catch (e) { return; }
+      if (!ev || !ev.type) return;
+
+      if (ev.type === "error") {
+        streamError = ev.error || { message: "The stream reported an error." };
+      } else if (ev.type === "message_start" && ev.message) {
+        msg.id = ev.message.id;
+        msg.model = ev.message.model;
+      } else if (ev.type === "content_block_start") {
+        var nb = ev.content_block || { type: "text", text: "" };
+        if (nb.type === "text" && typeof nb.text !== "string") nb.text = "";
+        blocks[ev.index] = nb;
+      } else if (ev.type === "content_block_delta" && ev.delta) {
+        var b = blocks[ev.index];
+        if (!b) { b = blocks[ev.index] = { type: "text", text: "" }; }
+        if (ev.delta.type === "text_delta") b.text = (b.text || "") + ev.delta.text;
+      } else if (ev.type === "message_delta" && ev.delta && ev.delta.stop_reason) {
+        msg.stop_reason = ev.delta.stop_reason;
+      }
+    }
+
+    function finish() {
+      /* filter(): a skipped index would leave a hole the render loops trip on */
+      msg.content = blocks.filter(function (b) { return !!b; });
+      return msg;
+    }
+
+    function pump() {
+      return reader.read().then(function (r) {
+        if (r.done) {
+          if (streamError) {
+            var err = new Error(streamError.message || "The stream reported an error.");
+            err.apiError = streamError;
+            throw err;
+          }
+          return finish();
+        }
+        if (bump) bump();                  /* bytes moved: restart the clock */
+        buf += decoder.decode(r.value, { stream: true });
+
+        /* SSE frames are separated by a blank line; keep the tail for later. */
+        var frames = buf.split("\n\n");
+        buf = frames.pop();
+        frames.forEach(function (frame) {
+          frame.split("\n").forEach(function (line) {
+            if (line.indexOf("data:") === 0) handle(line.slice(5).trim());
+          });
+        });
+
+        if (streamError) {
+          var e2 = new Error(streamError.message || "The stream reported an error.");
+          e2.apiError = streamError;
+          throw e2;
+        }
+        return pump();
+      });
+    }
+
+    return pump();
+  }
+
   /* ---------- API call ---------- */
   function planTrip(dest) {
     var key = getKey();
@@ -1444,9 +1532,30 @@
     var body = {
       model: "claude-sonnet-5",
       max_tokens: 12000,
+      /* Stream the answer. Without this the API stays silent for the whole
+         minute-plus it takes to write the brief, Cloudflare sees a dead
+         connection and kills it at ~100s with a bare "HTTP 524". Streaming
+         keeps tokens trickling, so the clock never runs out. The Worker
+         already pipes the body straight through, so no change was needed
+         there; readSse() below puts the pieces back together. */
+      stream: true,
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
       messages: [{ role: "user", content: buildPrompt(dest) }]
     };
+
+    /* Watchdog: abort before Cloudflare's ~100s idle limit turns into a 524. */
+    var ctrl = null, timer = null, timedOut = false;
+    try { ctrl = new AbortController(); } catch (e) { ctrl = null; }
+    function stopClock() { if (timer) { clearTimeout(timer); timer = null; } }
+    function startClock() {
+      if (!ctrl) return;
+      stopClock();
+      timer = setTimeout(function () {
+        timedOut = true;
+        try { ctrl.abort(); } catch (e) {}
+      }, REQUEST_TIMEOUT_MS);
+    }
+    startClock();
 
     fetch(API_URL, {
       method: "POST",
@@ -1454,14 +1563,24 @@
         "content-type": "application/json",
         "x-trip-password": key
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
+      signal: ctrl ? ctrl.signal : undefined
     }).then(function (res) {
+      var ctype = res.headers.get("content-type") || "";
+      var streamed = res.ok && ctype.indexOf("text/event-stream") !== -1 &&
+                     res.body && typeof res.body.getReader === "function";
+      if (streamed) {
+        return readSse(res, startClock).then(function (msg) {
+          return { ok: true, status: res.status, text: JSON.stringify(msg), data: msg };
+        });
+      }
       return res.text().then(function (text) {
-        return { ok: res.ok, status: res.status, text: text };
+        return { ok: res.ok, status: res.status, text: text, data: null };
       });
     }).then(function (r) {
-      var data = null;
-      try { data = JSON.parse(r.text); } catch (e) { data = null; }
+      stopClock();
+      var data = r.data;
+      if (!data) { try { data = JSON.parse(r.text); } catch (e) { data = null; } }
 
       if (!r.ok) {
         var apiMsg = (data && data.error && data.error.message) || r.text || "";
@@ -1527,6 +1646,18 @@
       }
       render(trip);
     }).catch(function (e) {
+      stopClock();
+      if (timedOut || (e && e.name === "AbortError")) {
+        fail("That took too long",
+             "The research ran past " + Math.round(REQUEST_TIMEOUT_MS / 1000) +
+             " seconds, so it was stopped. Tap Plan again, or ask for fewer days.", "");
+        return;
+      }
+      if (e && e.apiError) {
+        fail("The API returned an error",
+             e.apiError.message || "The stream stopped with an error.", "");
+        return;
+      }
       fail("No connection",
            "The request could not be sent. Check your internet connection and try again.",
            String(e && e.message ? e.message : e));
@@ -2585,7 +2716,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-07";
+  var APP_BUILD = "2026-09-08b";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so

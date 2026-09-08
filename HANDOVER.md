@@ -194,3 +194,39 @@ built client-side and can never be missing.
   or in this file.
 - Full list of open items: `MUCHIEZ_COCKPIT/BACKLOG.md`. Previous session's
   narrative: `MUCHIEZ_COCKPIT/STAND.md`.
+
+---
+
+## 6. The HTTP 524 on desktop — fixed 2026-09-08
+
+**Symptom.** Planning a trip on the Mac waited 60–100s and then failed with
+"HTTP 524", on every destination including a 2-day Paris. The iPhone, on the
+same URL, password and backend, worked fine. Ruled out beforehand: stale cache,
+VPN, corporate network, wrong build.
+
+**Cause.** Not the Worker. `worker.js` already pipes both the request and the
+response body straight through (`new Response(upstream.body, ...)`) and never
+buffers. The page, however, asked for a **non-streamed** reply, so the Anthropic
+API sent nothing at all for the whole minute-plus it spent writing a 12,000-token
+brief. Cloudflare drops any connection idle for ~100 seconds and answers 524.
+The phone was simply winning a race the Mac kept losing.
+
+**Fix (all client-side).**
+
+- `index.html` sends `stream: true`.
+- `readSse()` reassembles the SSE events (`content_block_start`,
+  `content_block_delta`, `message_delta`) into the same message object the old
+  buffered path produced, so every line of parsing and rendering below it is
+  unchanged. Non-streamed replies still work — the code branches on the
+  response's `content-type`.
+- An `AbortController` gives up after 95s of **silence** and shows "That took
+  too long — tap Plan again, or ask for fewer days" instead of a raw 524. The
+  clock restarts on every chunk that arrives, so a long trip is never cut off.
+
+**`worker.js` is now in this repo** as a reference copy of what is deployed at
+`trip-backend.fhy5byhvk9.workers.dev`. It is **not** deployed from here — the
+live version is edited in the Cloudflare dashboard (Workers & Pages →
+trip-backend → Edit code). If you change one, change the other.
+
+**If 524 ever returns:** check the page is still sending `stream: true`, and
+check the build stamp in the footer matches the newest deploy.
