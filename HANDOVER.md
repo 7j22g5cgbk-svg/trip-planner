@@ -197,36 +197,63 @@ built client-side and can never be missing.
 
 ---
 
-## 6. The HTTP 524 on desktop — fixed 2026-09-08
+## 6. The HTTP 524 on desktop — still open (desktop only, low priority)
 
-**Symptom.** Planning a trip on the Mac waited 60–100s and then failed with
+**Symptom.** Planning a trip on the Mac waits 60–100s and then fails with
 "HTTP 524", on every destination including a 2-day Paris. The iPhone, on the
-same URL, password and backend, worked fine. Ruled out beforehand: stale cache,
-VPN, corporate network, wrong build.
+same URL, password and backend, works fine. Ruled out: stale cache (it persists
+after Safari "Remove All Website Data"), VPN, corporate network, wrong build.
+Fresh `?v=N` URLs also 524 on desktop.
 
-**Cause.** Not the Worker. `worker.js` already pipes both the request and the
-response body straight through (`new Response(upstream.body, ...)`) and never
-buffers. The page, however, asked for a **non-streamed** reply, so the Anthropic
-API sent nothing at all for the whole minute-plus it spent writing a 12,000-token
-brief. Cloudflare drops any connection idle for ~100 seconds and answers 524.
-The phone was simply winning a race the Mac kept losing.
+**Root cause: not confirmed.** Do not guess at it again — see the streaming
+attempt below.
 
-**Fix (all client-side).**
+### The streaming attempt, and why it was reverted (2026-09-15)
 
-- `index.html` sends `stream: true`.
-- `readSse()` reassembles the SSE events (`content_block_start`,
-  `content_block_delta`, `message_delta`) into the same message object the old
-  buffered path produced, so every line of parsing and rendering below it is
-  unchanged. Non-streamed replies still work — the code branches on the
-  response's `content-type`.
-- An `AbortController` gives up after 95s of **silence** and shows "That took
-  too long — tap Plan again, or ask for fewer days" instead of a raw 524. The
-  clock restarts on every chunk that arrives, so a long trip is never cut off.
+On 2026-09-08 the page was changed to send `stream: true`, on the theory that
+Anthropic's silence while writing a 12,000-token brief let Cloudflare time the
+connection out at ~100s. A `readSse()` reader reassembled the SSE events.
 
-**`worker.js` is now in this repo** as a reference copy of what is deployed at
+It broke the app for **everyone**. `readSse()` mis-assembles `web_search`
+replies, which arrive in several segments, and ends up reporting
+`stop_reason: "max_tokens"`. The truncation check
+(`var truncated = data.stop_reason === "max_tokens"`) then fired on trips that
+had finished perfectly, so every trip — including "Lisbon, 1 day", and on the
+iPhone — failed with **"Ran out of room — the trip was too long to finish"**.
+
+The `stream: true` line has been removed. The page is back on the buffered
+`application/json` path (`data = JSON.parse(r.text)`), which is what worked
+before. `readSse()` is still in the file but dormant: it only runs if a reply
+ever arrives as `text/event-stream`.
+
+**Do not re-enable streaming** unless the reader is rewritten to handle
+`web_search`'s multi-step stream *and* tested in a separate file first — never
+on the live app.
+
+**Kept from that change** (all still in place and wanted):
+
+- The `AbortController` / `REQUEST_TIMEOUT_MS` (95s) watchdog, so a rare
+  too-long trip shows "That took too long — tap Plan again, or ask for fewer
+  days" instead of a raw 524.
+- The network-first service worker and its `controllerchange` auto-reload.
+- The error handling around the API response.
+
+### When the desktop 524 is picked up again
+
+Diagnose first, don't guess:
+
+1. From the Mac, `curl` the Worker with a small trip and time it:
+   `curl -w "%{time_total}\n" ...`
+2. Compare against a direct `api.anthropic.com` call from the same Mac.
+3. That isolates Worker vs Anthropic vs Mac-network latency. Only then pick a
+   fix.
+
+It affects the desktop only — the iPhone is fine — so it must never hold up a
+working app.
+
+**`worker.js` is in this repo** as a reference copy of what is deployed at
 `trip-backend.fhy5byhvk9.workers.dev`. It is **not** deployed from here — the
 live version is edited in the Cloudflare dashboard (Workers & Pages →
-trip-backend → Edit code). If you change one, change the other.
-
-**If 524 ever returns:** check the page is still sending `stream: true`, and
-check the build stamp in the footer matches the newest deploy.
+trip-backend → Edit code). If you change one, change the other. The Worker was
+never changed for streaming and needs no change now: it pipes both bodies
+straight through and mirrors the upstream `Content-Type`.

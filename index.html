@@ -1436,20 +1436,17 @@
   }
 
   /* ---------- reading the reply ----------
-     The Worker can answer in either of two shapes and this page handles both:
+     The page asks for one buffered JSON object and that is what it gets.
 
-       1. one buffered JSON object  (the old way), or
-       2. an SSE stream, content-type text/event-stream  (the fix).
-
-     Shape 2 exists because Cloudflare cuts any connection that goes ~100
-     seconds without a byte moving and the browser then shows a bare
-     "HTTP 524". A stream keeps dribbling tokens, so the clock never runs
-     out. Both shapes end up as the same message object, so every line of
-     the handling code below is shared. */
+     readSse() below is kept only as a safety net: if a reply ever arrives
+     as content-type text/event-stream it is reassembled into the same
+     message object, so the handling code stays shared. It is dormant while
+     the request body carries no "stream: true" - and it must not be
+     switched back on, because it mishandles web_search's multi-part
+     stream and made every trip fail with "Ran out of room". */
 
   /* Nothing heard for this long -> give up with a readable message instead
-     of letting Cloudflare hand back a 524. While a stream is arriving the
-     clock is restarted on every chunk, so a long trip is never cut off. */
+     of letting Cloudflare hand back a 524. */
   var REQUEST_TIMEOUT_MS = 95000;
 
   function readSse(res, bump) {
@@ -1532,13 +1529,12 @@
     var body = {
       model: "claude-sonnet-5",
       max_tokens: 12000,
-      /* Stream the answer. Without this the API stays silent for the whole
-         minute-plus it takes to write the brief, Cloudflare sees a dead
-         connection and kills it at ~100s with a bare "HTTP 524". Streaming
-         keeps tokens trickling, so the clock never runs out. The Worker
-         already pipes the body straight through, so no change was needed
-         there; readSse() below puts the pieces back together. */
-      stream: true,
+      /* No "stream: true" here on purpose. Streaming was tried to fix a
+         Mac-desktop-only HTTP 524, but the reader mis-assembled the
+         multi-part web_search replies and reported stop_reason
+         "max_tokens", so finished trips failed with "Ran out of room" -
+         on the phones too. Do not switch it back on until a rewritten
+         reader has been tested in a separate file. */
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
       messages: [{ role: "user", content: buildPrompt(dest) }]
     };
@@ -2716,7 +2712,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-08b";
+  var APP_BUILD = "2026-09-15a";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so
