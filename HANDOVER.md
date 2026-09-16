@@ -95,7 +95,7 @@ files make that work; nothing about the research or rendering path was touched.
 | File | Role |
 |---|---|
 | `manifest.webmanifest` | name/short_name `Travel`, `display: standalone`, theme `#B0553C`, background `#EAF6FF`, 192 + 512 icons marked `any maskable` |
-| `sw.js` | app-shell service worker, cache name `travel-v1` |
+| `sw.js` | app-shell service worker, network-first, cache name `trip-cache-v2026-09-08b` |
 | `icon-180/192/512.png` | already present before this session; 180 is the `apple-touch-icon` |
 
 `index.html` gained only a `<head>` block (manifest link, `theme-color`, the
@@ -109,18 +109,25 @@ leading `/` in the manifest, the icons or the register call resolves to the doma
 root and 404s — the app silently stops being installable. Never write a leading
 slash in these files.
 
-Service worker behaviour:
-- install caches `./`, `./index.html`, `./manifest.webmanifest` and the three icons;
-  activate deletes any cache whose name is not `travel-v1`.
-- navigations are **network-first**, falling back to cached `./index.html` offline.
-- other same-origin GETs (icons, manifest) are cache-first.
+Service worker behaviour (re-read from `sw.js` on 2026-09-16):
+- install caches `./`, `./index.html`, `./manifest.webmanifest`, `./icon-180.png`
+  and the two `shared/` scripts, then `skipWaiting()`; activate deletes every
+  cache whose name is not the current `CACHE` and claims open pages.
+- **every** GET is network-first - not just navigations - caching a copy as it
+  goes and falling back to cache (then to `./index.html`) only when the network
+  fails.
 - `api.anthropic.com`, all other cross-origin requests, and every non-GET request
   fall through untouched. **The API is never cached** — a trip brief always comes
   off the live network.
 
-**Trap:** the shell is pinned to `travel-v1`. Ship a change to `index.html` without
-bumping that string and returning visitors keep the old page from cache. Bump to
-`travel-v2` (and so on) in the same commit as any `index.html` change.
+**Corrected 2026-09-16:** this used to warn that the shell was pinned to
+`travel-v1` and that you had to bump the cache name with every `index.html`
+change. That is no longer true. `sw.js` is now **network-first**
+(`CACHE = "trip-cache-v2026-09-08b"`): it always tries the network and only falls
+back to cache when offline, so a new build appears without bumping anything. An
+online phone therefore *cannot* be stuck on an old build — if the app misbehaves,
+the service worker is not the reason, and it is not worth chasing. Verify with
+the `APP_BUILD` curl in section 7 instead.
 
 **Trap:** a service worker only registers over HTTPS or on `localhost`. Opening the
 file by double-clicking it (`file://`) will never show an install prompt and never
@@ -197,63 +204,161 @@ built client-side and can never be missing.
 
 ---
 
-## 6. The HTTP 524 on desktop — still open (desktop only, low priority)
+## 6. "Ran out of room" and the HTTP 524 — root cause found 2026-09-16
 
-**Symptom.** Planning a trip on the Mac waits 60–100s and then fails with
-"HTTP 524", on every destination including a 2-day Paris. The iPhone, on the
-same URL, password and backend, works fine. Ruled out: stale cache (it persists
-after Safari "Remove All Website Data"), VPN, corporate network, wrong build.
-Fresh `?v=N` URLs also 524 on desktop.
+**One cause, two symptoms: the model was spending its output budget on extended
+thinking that this page throws away.**
 
-**Root cause: not confirmed.** Do not guess at it again — see the streaming
-attempt below.
+### The measurement that settled it
 
-### The streaming attempt, and why it was reverted (2026-09-15)
+Breaking a reply down by content block (loaded library, "Lisbon, 1 day"):
 
-On 2026-09-08 the page was changed to send `stream: true`, on the theory that
-Anthropic's silence while writing a 12,000-token brief let Cloudflare time the
-connection out at ~100s. A `readSse()` reader reassembled the SSE events.
+| block type | count | output tokens |
+|---|---|---|
+| `thinking` | 3 | **3,591** |
+| final JSON `text` | 1 | **706** |
 
-It broke the app for **everyone**. `readSse()` mis-assembles `web_search`
-replies, which arrive in several segments, and ends up reporting
-`stop_reason: "max_tokens"`. The truncation check
-(`var truncated = data.stop_reason === "max_tokens"`) then fired on trips that
-had finished perfectly, so every trip — including "Lisbon, 1 day", and on the
-iPhone — failed with **"Ran out of room — the trip was too long to finish"**.
+Roughly **70-85% of `output_tokens` was thinking.** The page never renders a
+thinking block — `planTrip` only ever concatenates `type === "text"` — so every
+one of those tokens was generated, billed, waited for, and discarded.
 
-The `stream: true` line has been removed. The page is back on the buffered
-`application/json` path (`data = JSON.parse(r.text)`), which is what worked
-before. `readSse()` is still in the file but dormant: it only runs if a reply
-ever arrives as `text/event-stream`.
+**Why that broke the app.** Thinking counts against `max_tokens` *and* against the
+clock (output runs at roughly 100 tokens/second). A bigger saved-places library
+makes the model think harder, so thinking grew until it consumed the whole 12,000
+cap before the JSON was finished — `stop_reason: "max_tokens"`, JSON cut
+mid-string, **"Ran out of room"**. When it finished just slightly faster, it
+instead ran past the 95s watchdog or Cloudflare's ~125s cut — **HTTP 524**. Same
+cause, different side of the same cliff.
 
-**Do not re-enable streaming** unless the reader is rewritten to handle
-`web_search`'s multi-step stream *and* tested in a separate file first — never
-on the live app.
+This is why a *one-day* trip could fail: the trigger was library size and thinking
+depth, not trip length. It is also why a fresh `?v=N` URL never helped — the
+library lives in `localStorage` and survives it.
 
-**Kept from that change** (all still in place and wanted):
+### The fix
 
-- The `AbortController` / `REQUEST_TIMEOUT_MS` (95s) watchdog, so a rare
-  too-long trip shows "That took too long — tap Plan again, or ask for fewer
-  days" instead of a raw 524.
-- The network-first service worker and its `controllerchange` auto-reload.
-- The error handling around the API response.
+```js
+thinking: { type: "disabled" },
+```
 
-### When the desktop 524 is picked up again
+Sonnet 5 runs **adaptive thinking when the `thinking` parameter is omitted**. The
+page had never set it, so it had been thinking by default all along.
 
-Diagnose first, don't guess:
+Measured on the exact case that was failing (Lisbon, 1 day, full library):
 
-1. From the Mac, `curl` the Worker with a small trip and time it:
-   `curl -w "%{time_total}\n" ...`
-2. Compare against a direct `api.anthropic.com` call from the same Mac.
-3. That isolates Worker vs Anthropic vs Mac-network latency. Only then pick a
-   fix.
+| | time | output_tokens | thinking | result |
+|---|---|---|---|---|
+| thinking on (the bug) | 124s | 12,584 | ~10,000 | truncated |
+| `effort: "low"` | 32s | 2,799 | 1,147 | ok |
+| **`thinking: disabled`** | **25.5s** | **2,524** | **0** | ok |
 
-It affects the desktop only — the iPhone is fine — so it must never hold up a
-working app.
+Five times faster, five times smaller — and the *answer itself got longer*
+(6,143 characters of JSON vs 3,249), because the whole budget now goes to the
+answer instead of to reasoning nobody sees.
 
-**`worker.js` is in this repo** as a reference copy of what is deployed at
-`trip-backend.fhy5byhvk9.workers.dev`. It is **not** deployed from here — the
-live version is edited in the Cloudflare dashboard (Workers & Pages →
-trip-backend → Edit code). If you change one, change the other. The Worker was
-never changed for streaming and needs no change now: it pipes both bodies
-straight through and mirrors the upstream `Content-Type`.
+`output_config: {effort: "low"}` also works and is the gentler option if a future
+change ever needs some reasoning back. Note the Claude API docs warn that
+disabling thinking on **Opus 5** can make it write tool calls into visible text;
+that caveat is model-specific and does not apply to Sonnet 5, and three
+`server_tool_use` blocks fire correctly in every test above.
+
+### Also changed, while in here
+
+- **Dropped `maps` and `route_maps` from the requested JSON.** `mapsFor()` and
+  `routeFor()` have always built these client-side, and the built directions link
+  is the better one — it carries real waypoints. The model was spending ~30 tokens
+  per place re-emitting URLs that were then thrown away. `tools/render_test.js`
+  proves offline that every link still appears.
+- **One automatic retry** on a genuinely truncated reply, asking for a *leaner*
+  answer rather than a bigger budget (`send(dest, key, compact)`).
+
+`SAVED_MAX` stays at **60** and the recommendation counts are unchanged. Both were
+cut back at one point while chasing the wrong theory; thinking was the real cause,
+so neither needed to be degraded.
+
+### Things that were ruled out, with evidence — do not re-chase
+
+- **A stale deploy.** The live file was fetched and is byte-identical to the repo.
+- **The service worker.** It is network-first; an online phone cannot be stale.
+- **A parsing bug.** `"Ran out of room"` has only two call sites, both gated on a
+  real `stop_reason === "max_tokens"`, and `extractJsonObject` is a correct
+  string-aware brace scanner. The JSON really was cut off.
+- **Raising `max_tokens`.** Tried: 16,000 turned truncation into an HTTP 524,
+  because time scales with tokens generated. Raising the cap is the wrong lever.
+- **Fewer searches.** `max_uses: 2` and even `1` still ran past 125s. Search count
+  was never the cost; thinking was.
+- **Streaming.** Still off, still reverted, and never the cause of any of this —
+  every failure above was measured on the reverted non-streaming build.
+
+## 7. Deploy flow — trip-planner is the only source of truth
+
+`MUCHIEZ_COCKPIT` is a different repo. Nothing in it is served to anyone. The
+phone app is **only** `~/Desktop/trip-planner/index.html`, published by GitHub
+Pages from `main`.
+
+1. Edit `index.html` (or work on `index-candidate.html` and copy it over).
+2. Bump `APP_BUILD` in the same edit.
+3. **Run the suite and let it pass** — see section 8.
+4. `git commit` and `git push origin main`.
+5. Wait for the Pages rebuild, then verify what is actually live:
+
+```sh
+curl -s "https://7j22g5cgbk-svg.github.io/trip-planner/index.html?cb=$(date +%s)" \
+  | grep -o 'APP_BUILD = "[^"]*"'
+```
+
+If that stamp has not changed, the deploy has not landed — do not start debugging
+the app. The stamp is also shown in the page footer, so the live version can be
+read off a phone at a glance.
+
+**Rollback in one step.** Every good build is tagged:
+
+```sh
+git tag -l 'good-*'                          # list known-good builds
+git checkout good-2026-09-15a -- index.html  # restore that file
+git commit -m "roll back to good-2026-09-15a" && git push origin main
+```
+
+Tag a build `good-<APP_BUILD>` as soon as the suite passes against it live.
+
+---
+
+## 8. The regression suite
+
+`tools/trip_test.py` runs real trips against the live backend and asserts each
+one would actually **render**, not merely return HTTP 200. It reproduces the
+client's own pipeline (concatenate text blocks, strip `<cite>`, scan for the
+first balanced `{ ... }`, check the shape the renderer needs) and fails any run
+slower than the 95s watchdog.
+
+It cannot drift from the app: `tools/extract_prompt.js` pulls `buildPrompt()`
+out of `index.html` and runs it under JavaScriptCore, and `max_tokens`,
+`max_uses`, `SAVED_MAX` and `PREF_MAX` are all read from the file under test.
+
+```sh
+# the password lives in the login keychain
+security add-generic-password -s trip-planner-password -a "$USER" -W
+
+python3 tools/trip_test.py                         # full matrix, 6 trips
+python3 tools/trip_test.py --tier short            # quick check
+python3 tools/trip_test.py --loaded                # simulate a full library
+python3 tools/trip_test.py --index index-candidate.html   # test a candidate
+python3 tools/render_test.js                       # see below
+```
+
+`--loaded` is the important one: an empty library hides the bug entirely.
+
+`tools/render_test.js` is an offline companion (no network, no API credit) that
+proves the page still builds every map link now that the model stops sending
+them: `jsc tools/render_test.js -- index.html`.
+
+**Two traps when testing:**
+
+- Cloudflare rejects the Python stdlib User-Agent with `403 error code: 1010`
+  before the Worker ever runs. The suite sends a browser UA for this reason. A
+  403 here is not a bad password — a bad password is a 401.
+- The Worker allows **40 trip requests per day for everyone** (`DAILY_LIMIT` in
+  `worker.js`). A full matrix is 6 of them. Budget accordingly; the cap is shared
+  with real users.
+
+---
+

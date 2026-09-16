@@ -1419,15 +1419,19 @@
       "travel coverage. Never fabricate a source or claim one of these recommended a " +
       "place unless the search actually showed it. " +
       "Return ONLY a JSON object (no prose, no code fences) with " +
-      "this shape: { destination, summary, hotels:[{name,why,price,website,maps}], " +
-      "itineraries:[{name,days:[{day,stops:[{time,name,note,maps,website}],route_maps}]}] " +
+      "this shape: { destination, summary, hotels:[{name,why,price,website}], " +
+      "itineraries:[{name,days:[{day,stops:[{time,name,note,website}]}]}] " +
       "(produce EXACTLY 3 genuinely different itineraries), " +
-      "restaurants:[{name,cuisine,note,website,maps,saved}], sights:[{name,note,maps,website}] }. " +
+      "restaurants:[{name,cuisine,note,website,saved}], sights:[{name,note,website}] }. " +
       "Sights and stops must be REAL named places, never activities/meals. For " +
       "hotels/restaurants/sights/stops, use web search to find the official website and put the " +
       "verified URL in website, else empty string. Set saved=false except where " +
       "the saved-places list below says otherwise. " +
-      "Never invent places or links. HARD LIMITS: Output ONLY the JSON, nothing else. " +
+      "Never invent places or links. " +
+      "NEVER write a 'maps' or 'route_maps' field and never write a google.com/maps " +
+      "URL - this page builds every map link itself from the place name, so any you " +
+      "write are thrown away and only make the answer slower. " +
+      "HARD LIMITS: Output ONLY the JSON, nothing else. " +
       "EXACTLY 3 itineraries. summary: max 20 words. Every 'why', 'note', and 'cuisine' " +
       "field: max 12 words. Do NOT repeat disclaimer text in notes - if something is " +
       "unverified, write only 'unverified'. Keep the whole response as compact as possible." +
@@ -1525,10 +1529,32 @@
     var key = getKey();
     if (!key) { show("setup"); return; }
     show("loading");
+    send(dest, key, false);
+  }
+
+  /* One retry, and only for a genuinely truncated reply. It asks for a LEANER
+     answer, not a bigger budget: raising max_tokens to 16000 was measured to
+     push the reply past Cloudflare's ~100s limit, turning "Ran out of room"
+     into an HTTP 524. Shrinking the output is what actually finishes. */
+  function send(dest, key, compact) {
+    var prompt = buildPrompt(dest);
+    if (compact) {
+      prompt += " THE LAST ANSWER WAS CUT OFF because it was too long. Answer " +
+                "again, much shorter: AT MOST 3 hotels, 4 restaurants, 4 sights " +
+                "and 3 stops per day. Every 'why', 'note' and 'cuisine' field: " +
+                "max 8 words. Still return all 3 itineraries, and JSON only.";
+    }
 
     var body = {
       model: "claude-sonnet-5",
       max_tokens: 12000,
+      /* Sonnet 5 thinks by default when this is omitted, and the thinking
+         counts against max_tokens AND against the clock. This page throws
+         thinking blocks away - it only ever reads the JSON - so it was paying
+         for reasoning it never showed. Measured on "Lisbon, 1 day" with a full
+         library: 12,584 output tokens / 124s and truncated with thinking on,
+         2,524 tokens / 25s and complete with it off. That was the whole bug. */
+      thinking: { type: "disabled" },
       /* No "stream: true" here on purpose. Streaming was tried to fix a
          Mac-desktop-only HTTP 524, but the reader mis-assembled the
          multi-part web_search replies and reported stop_reason
@@ -1536,7 +1562,7 @@
          on the phones too. Do not switch it back on until a rewritten
          reader has been tested in a separate file. */
       tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
-      messages: [{ role: "user", content: buildPrompt(dest) }]
+      messages: [{ role: "user", content: prompt }]
     };
 
     /* Watchdog: abort before Cloudflare's ~100s idle limit turns into a 524. */
@@ -1613,8 +1639,12 @@
       /* stop_reason "max_tokens" means the answer was cut off mid-JSON. */
       var truncated = (data.stop_reason === "max_tokens");
       function tooLong(rawText) {
+        /* First overflow: silently try again, smaller. Only a second one is
+           worth showing the user. */
+        if (!compact) { send(dest, key, true); return; }
         fail("Ran out of room",
-             "The trip was too long to finish - tap Plan again.", rawText);
+             "The trip was too long to finish - tap Plan again, or ask for fewer days.",
+             rawText);
       }
 
       if (!raw) {
@@ -2712,7 +2742,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-15a";
+  var APP_BUILD = "2026-09-16a";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so
