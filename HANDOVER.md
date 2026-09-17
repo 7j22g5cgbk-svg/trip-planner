@@ -512,7 +512,11 @@ tag-only stripping produces. `trip_test.py` now keeps the full text **and** a
 jsc tools/retry_budget_test.js -- index.html   # retry cannot stack
 jsc tools/cite_parse_test.js   -- index.html   # cite-laden replies still parse
 jsc tools/render_test.js       -- index.html   # map links still build
+jsc tools/pause_turn_test.js   -- index.html   # runaway search fails honestly
 ```
+
+`jsc` is not on PATH; it lives at
+`/System/Library/Frameworks/JavaScriptCore.framework/Versions/A/Helpers/jsc`.
 
 Do not tag `good-2026-09-17b` yet. See section 11 — the live cite run has not
 been obtainable, and a separate failure is open.
@@ -575,11 +579,63 @@ different cause. Anything diagnosing that message from the symptom alone will
 misattribute it.
 
 `pause_turn` is the API asking the client to continue the turn by sending the
-assistant response back. Options, cheapest first: fail honestly (distinct
-message, no retry storm) so it stops masquerading as a parse error; or handle it
-properly by continuing the turn, which costs another round-trip on a path
-already fighting a 110s watchdog.
+assistant response back.
 
-**Unfixed as of this writing.** It is the reason `good-2026-09-17b` is untagged:
-tagging a build that fails loaded New York ~57% of the time would mislead a
-later session that no longer remembers this one.
+### Fixed in build 2026-09-17c — fail honestly, never retry
+
+The page does **not** continue a paused turn. Another round-trip on a path
+already fighting the 110s watchdog would cost as much again for the same odds.
+It says what happened and stops.
+
+Detection, in `index.html` where the content blocks are concatenated:
+
+- `server_tool_use` blocks named `web_search` are counted, and
+  `web_search_tool_result` blocks whose `content` is an **object** of type
+  `web_search_tool_result_error` are counted separately (a healthy result is an
+  array, so it cannot be mistaken for an error).
+- `searchRanAway` = any search error, or more search calls than the `max_uses`
+  actually sent. `max_uses` is read off the request body that was just built,
+  so there is one source of truth and the number cannot drift.
+- `stop_reason === "pause_turn"` fails **before any parsing is attempted** — an
+  unfinished turn has nothing complete to render whatever text it carries.
+
+The message is its own: **"Search ran long on this trip — Web search kept
+retrying and the research never finished. Tap Plan again, or ask for fewer
+days."** It must never fall through to "Could not read the trip data"; that is
+section 10's cite bug and the two are indistinguishable from the outside.
+
+**No retry, anywhere on this path.** `tooLong()` checks `searchRanAway` before
+its retry call: a truncated reply whose searches also ran away is not a size
+problem, and the smaller retry only pays for the loop a second time. The
+empty-answer and parse-failure branches check it too.
+
+`tools/trip_test.py` mirrors all of it (`client_parse` now takes `max_uses`), or
+it would stop reproducing the client and would keep reporting a paused turn as
+the cite message.
+
+`tools/pause_turn_test.js` is the guard: 19 checks, of which 8 fail against the
+previous build. It lifts the real detector out of the page rather than
+restating it, and it asserts the *ordering* — pause_turn before the parse, the
+runaway guard before the retry call, exactly one retry call site in the file.
+
+**Verified after the fix (2026-09-17, build 2026-09-17c):**
+
+- Offline: retry budget 6/6, cite parse 9/9, render 15/15, pause_turn 19/19.
+- Harness mirror, replayed offline on the five shapes that matter: the live
+  14-search paused turn reads as "Search ran long"; a healthy 2-search reply
+  passes; a mid-turn search error with a legal count reads as "Search ran
+  long"; a genuinely unparseable reply with healthy searches still reads as
+  "Could not read the trip data"; a truncated one still reads as "Ran out of
+  room". Nothing was re-bucketed that should not have been.
+- Live, 3 trips with a full library: Lisbon 1 day, Paris 2 days, Rome 3 days —
+  **3/3 pass**, exactly 2 searches each, 27k input, 26.9–38.5s. Short and
+  medium trips are untouched by the detector.
+- **Not** re-run live on "New York, 7 days". The behaviour there is proven
+  offline against the exact captured shape, and one live attempt is a ~57%
+  chance of spending ~240,000 input tokens to display a message that costs
+  nothing to demonstrate. If you want the end-to-end live confirmation anyway,
+  that is the one run to spend it on.
+
+**Trap found while writing it:** this `jsc` ignores the argument to `quit()` —
+every run exits 0. The offline suite's exit codes mean nothing; read the printed
+summary line. Do not wire these into anything that checks `$?`.

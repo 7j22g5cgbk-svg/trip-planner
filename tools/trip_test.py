@@ -92,23 +92,42 @@ def extract_json_object(s):
     return ""
 
 
-def client_parse(data):
+def client_parse(data, max_uses=0):
     """Reproduce what index.html does with a successful response body.
     Returns (trip_or_None, raw_text, failure_reason_or_None)."""
-    parts = [b.get("text", "") for b in (data.get("content") or [])
-             if isinstance(b, dict) and b.get("type") == "text"
-             and isinstance(b.get("text"), str)]
+    blocks = [b for b in (data.get("content") or []) if isinstance(b, dict)]
+    parts = [b.get("text", "") for b in blocks
+             if b.get("type") == "text" and isinstance(b.get("text"), str)]
     raw = "\n".join(parts).strip()
+
+    # Mirror the runaway-search detector. Without this the harness reports a
+    # paused turn as the cite bug's message and hides the real failure.
+    search_calls = len([b for b in blocks
+                        if b.get("type") == "server_tool_use"
+                        and b.get("name") == "web_search"])
+    search_errors = len([b for b in blocks
+                         if b.get("type") == "web_search_tool_result"
+                         and isinstance(b.get("content"), dict)
+                         and b["content"].get("type") == "web_search_tool_result_error"])
+    ran_away = search_errors > 0 or (max_uses > 0 and search_calls > max_uses)
     # Mirror index.html exactly: the cite ELEMENT and its content, then any
     # unpaired tag. Removing only the tags leaves the quoted source text inside
     # the JSON string, newlines and all, and the parse dies on a complete reply.
     raw = re.sub(r"<cite\b[^>]*>.*?</cite>", "", raw, flags=re.I | re.S)
     raw = re.sub(r"</?cite\b[^>]*>", "", raw, flags=re.I)
 
+    # An unfinished turn has nothing complete to render, whatever text it
+    # carries, so this is decided before any parsing - exactly as the page does.
+    if data.get("stop_reason") == "pause_turn":
+        return None, raw, "Search ran long on this trip"
+
     truncated = data.get("stop_reason") == "max_tokens"
 
     if not raw:
-        return None, raw, ("Ran out of room" if truncated else "Empty answer")
+        if truncated:
+            return None, raw, "Ran out of room"
+        return None, raw, ("Search ran long on this trip" if ran_away
+                           else "Empty answer")
 
     candidate = extract_json_object(re.sub(r"```[a-zA-Z]*", " ", raw))
     if not candidate:
@@ -119,7 +138,9 @@ def client_parse(data):
         trip = None
 
     if not isinstance(trip, dict):
-        return None, raw, ("Ran out of room" if truncated
+        if truncated:
+            return None, raw, "Ran out of room"
+        return None, raw, ("Search ran long on this trip" if ran_away
                            else "Could not read the trip data")
     return trip, raw, None
 
@@ -222,7 +243,7 @@ def run_case(dest, password, max_tokens, max_uses, timeout,
                            if isinstance(b, dict)
                            and b.get("type") == "server_tool_use"])
 
-    trip, raw, failure = client_parse(data)
+    trip, raw, failure = client_parse(data, max_uses)
     # Full text, not a 4000-char sample: a parse failure is unreadable without
     # the part that broke, and that is rarely in the first 4000 characters.
     rec["raw"] = raw

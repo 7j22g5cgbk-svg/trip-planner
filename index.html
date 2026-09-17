@@ -1658,11 +1658,20 @@
 
       if (!data) { fail("Unreadable response", "The API reply was not valid JSON.", r.text); return; }
 
-      /* Concatenate every text block; ignore web_search tool blocks. */
+      /* Concatenate every text block; ignore web_search tool blocks - but
+         count them, because how many there are is itself a diagnosis (see
+         "runaway web_search" below). */
       var parts = [];
+      var searchCalls = 0, searchErrors = 0;
       if (Array.isArray(data.content)) {
         data.content.forEach(function (b) {
-          if (b && b.type === "text" && typeof b.text === "string") parts.push(b.text);
+          if (!b) return;
+          if (b.type === "text" && typeof b.text === "string") { parts.push(b.text); return; }
+          if (b.type === "server_tool_use" && b.name === "web_search") { searchCalls++; return; }
+          if (b.type === "web_search_tool_result") {
+            var c = b.content;
+            if (c && !Array.isArray(c) && c.type === "web_search_tool_result_error") searchErrors++;
+          }
         });
       }
       var raw = parts.join("\n").trim();
@@ -1684,9 +1693,49 @@
       raw = raw.replace(/<cite\b[^>]*>[\s\S]*?<\/cite>/gi, "");
       raw = raw.replace(/<\/?cite\b[^>]*>/gi, "");
 
+      /* ---------- runaway web_search ----------
+         Every request carries max_uses, but the search tool can start erroring
+         part-way through a turn. The model then loops retrying it, the reply
+         comes back with far more server_tool_use blocks than were allowed, and
+         the turn ends unfinished with stop_reason "pause_turn" and no JSON.
+
+         Measured on "New York, 7 days" with a full library, 2026-09-17:
+         4 of 7 live runs, 13-19 search calls against max_uses 2, ~240,000
+         input tokens spent for ~1,000 output tokens and nothing to render.
+
+         "pause_turn" is the API pausing an unfinished turn and inviting the
+         client to send the response back to continue it. This page declines:
+         another round-trip on a path already fighting the 110s watchdog would
+         cost as much again for the same odds. It says what happened and stops.
+
+         Two rules matter here:
+         - NEVER retry this. A retry storm is exactly how the failure turns
+           ~240,000 wasted input tokens into ~480,000.
+         - Do not let it reach the "Could not read the trip data" message.
+           That is the cite parse bug (section 10 of HANDOVER.md) and it looks
+           identical from the outside; anything diagnosing this from the
+           symptom alone chases the wrong bug. */
+      var maxUses = 0;
+      try { maxUses = body.tools[0].max_uses || 0; } catch (e) { maxUses = 0; }
+      var searchRanAway = searchErrors > 0 || (maxUses > 0 && searchCalls > maxUses);
+
+      function searchRanLong(detail) {
+        fail("Search ran long on this trip",
+             "Web search kept retrying and the research never finished. " +
+             "Tap Plan again, or ask for fewer days.", detail);
+      }
+
+      /* An unfinished turn has nothing complete to render, whatever text it
+         carries, so this is decided before any parsing is attempted. */
+      if (data.stop_reason === "pause_turn") { searchRanLong(r.text); return; }
+
       /* stop_reason "max_tokens" means the answer was cut off mid-JSON. */
       var truncated = (data.stop_reason === "max_tokens");
       function tooLong(rawText) {
+        /* A truncated reply whose searches also ran away is not a size problem
+           and the smaller retry will not fix it - it only pays for the loop a
+           second time. */
+        if (searchRanAway) { searchRanLong(rawText); return; }
         /* First overflow: silently try again, smaller - but only if enough of
            the shared budget is left. A first attempt that was both slow and
            truncated has already spent the user's patience; retrying it would
@@ -1701,6 +1750,7 @@
 
       if (!raw) {
         if (truncated) { tooLong(r.text); return; }
+        if (searchRanAway) { searchRanLong(r.text); return; }
         fail("Empty answer",
              "The model returned no text" +
              (data.stop_reason ? " (stop_reason: " + data.stop_reason + ")." : "."),
@@ -1718,6 +1768,7 @@
 
       if (!trip || typeof trip !== "object" || Array.isArray(trip)) {
         if (truncated) { tooLong(raw); return; }
+        if (searchRanAway) { searchRanLong(raw); return; }
         fail("Could not read the trip data",
              "The model replied, but not with the JSON this page expects.", raw);
         return;
@@ -2794,7 +2845,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-17b";
+  var APP_BUILD = "2026-09-17c";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so
