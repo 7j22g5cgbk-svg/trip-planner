@@ -1450,8 +1450,24 @@
      stream and made every trip fail with "Ran out of room". */
 
   /* Nothing heard for this long -> give up with a readable message instead
-     of letting Cloudflare hand back a 524. */
-  var REQUEST_TIMEOUT_MS = 95000;
+     of letting Cloudflare hand back a 524.
+
+     95s was cutting off genuine trips: the median heavy trip finishes in
+     ~27s, but web_search round-trips have a long tail, and "Lisbon, 1 day"
+     with a full saved library was occasionally crossing 95s and showing
+     "That took too long" for a trip that would have finished. 110s gives
+     that tail room while staying under Cloudflare's cut (~125s observed;
+     if a 524 ever appears at ~100s instead, this is the number to lower -
+     the 524 itself is handled below and reads as "That took too long"). */
+  var REQUEST_TIMEOUT_MS = 110000;
+
+  /* Both attempts together. The truncation retry below used to start a fresh
+     full-length watchdog, so a slow-then-truncated first attempt could stack
+     two of them into one ~190s wait that the user reads as a hang. Each
+     attempt now gets whatever is left of this budget, and a retry is skipped
+     outright when too little remains to be worth the wait. */
+  var PLAN_BUDGET_MS   = 115000;
+  var RETRY_MIN_MS     = 30000;
 
   function readSse(res, bump) {
     var reader = res.body.getReader();
@@ -1529,14 +1545,18 @@
     var key = getKey();
     if (!key) { show("setup"); return; }
     show("loading");
-    send(dest, key, false);
+    send(dest, key, false, Date.now() + PLAN_BUDGET_MS);
   }
 
-  /* One retry, and only for a genuinely truncated reply. It asks for a LEANER
-     answer, not a bigger budget: raising max_tokens to 16000 was measured to
-     push the reply past Cloudflare's ~100s limit, turning "Ran out of room"
-     into an HTTP 524. Shrinking the output is what actually finishes. */
-  function send(dest, key, compact) {
+  /* One retry, and only for a genuinely truncated reply that left enough of
+     PLAN_BUDGET_MS to be worth it. It asks for a LEANER answer, not a bigger
+     budget: raising max_tokens to 16000 was measured to push the reply past
+     Cloudflare's limit, turning "Ran out of room" into an HTTP 524.
+     Shrinking the output is what actually finishes.
+
+     deadline is the wall-clock instant both attempts share; planTrip() sets
+     it, and the retry inherits it rather than starting its own clock. */
+  function send(dest, key, compact, deadline) {
     var prompt = buildPrompt(dest);
     if (compact) {
       prompt += " THE LAST ANSWER WAS CUT OFF because it was too long. Answer " +
@@ -1561,7 +1581,12 @@
          "max_tokens", so finished trips failed with "Ran out of room" -
          on the phones too. Do not switch it back on until a rewritten
          reader has been tested in a separate file. */
-      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+      /* 3 -> 2. Each extra search is a server-side round-trip on the critical
+         path and the main source of the slow tail. Measured on "Lisbon, 1 day"
+         with a full library: 3 searches = 29.1s / 57,129 input tokens,
+         2 searches = 26.6s / 26,670 - same 2,924 output tokens either way, so
+         the trip that comes back is no smaller. */
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 2 }],
       messages: [{ role: "user", content: prompt }]
     };
 
@@ -1572,10 +1597,14 @@
     function startClock() {
       if (!ctrl) return;
       stopClock();
+      /* Whichever runs out first: this attempt's own limit, or what is left
+         of the budget shared with the retry. */
+      var left = deadline ? deadline - Date.now() : REQUEST_TIMEOUT_MS;
+      var ms   = Math.max(1000, Math.min(REQUEST_TIMEOUT_MS, left));
       timer = setTimeout(function () {
         timedOut = true;
         try { ctrl.abort(); } catch (e) {}
-      }, REQUEST_TIMEOUT_MS);
+      }, ms);
     }
     startClock();
 
@@ -1612,6 +1641,13 @@
                "Use “Change or clear password” to enter it again.", apiMsg);
         } else if (r.status === 429) {
           fail("Rate limited", apiMsg || "Too many requests. Wait a moment and try again.", r.text);
+        } else if (r.status === 524 || r.status === 504) {
+          /* Cloudflare cut the connection because the research outran it.
+             That is the same event as the client watchdog firing, so it
+             says the same thing instead of "HTTP 524". */
+          fail("That took too long",
+               "The research ran past the time the server allows, so it was " +
+               "stopped. Tap Plan again, or ask for fewer days.", r.text);
         } else if (r.status === 400 && /credit|balance|quota/i.test(apiMsg)) {
           fail("Credit problem", apiMsg, r.text);
         } else {
@@ -1631,17 +1667,33 @@
       }
       var raw = parts.join("\n").trim();
 
-      /* Strip web-search citation tags (<cite ...>...</cite>). They leak into
-         the trip text and their quotes can even break the JSON, so remove them
-         before anything else reads the response. */
+      /* Strip web-search citations. The model writes them *inside* JSON string
+         values, e.g. "note":"<cite index=3>Modern-luxe hotel ...</cite>", and
+         the quoted source text carries raw newlines and quote marks - both
+         illegal inside a JSON string, so the parse dies on a complete reply
+         and the page shows "Could not read the trip data".
+
+         Measured on "New York, 7 days" with a full library: stop_reason
+         end_turn, 3,516 tokens, nothing truncated - just unparseable.
+
+         The element and its CONTENT both have to go. The older rule here
+         removed only the tags and left the quoted text sitting in the string,
+         which is what broke it. The second pass mops up an unpaired tag, which
+         the first (deliberately non-greedy, so it cannot swallow the rest of
+         the reply) leaves behind. */
+      raw = raw.replace(/<cite\b[^>]*>[\s\S]*?<\/cite>/gi, "");
       raw = raw.replace(/<\/?cite\b[^>]*>/gi, "");
 
       /* stop_reason "max_tokens" means the answer was cut off mid-JSON. */
       var truncated = (data.stop_reason === "max_tokens");
       function tooLong(rawText) {
-        /* First overflow: silently try again, smaller. Only a second one is
-           worth showing the user. */
-        if (!compact) { send(dest, key, true); return; }
+        /* First overflow: silently try again, smaller - but only if enough of
+           the shared budget is left. A first attempt that was both slow and
+           truncated has already spent the user's patience; retrying it would
+           just stack a second long wait onto the first. Only a second overflow
+           (or a first one with no room to retry) is worth showing. */
+        var left = deadline ? deadline - Date.now() : PLAN_BUDGET_MS;
+        if (!compact && left >= RETRY_MIN_MS) { send(dest, key, true, deadline); return; }
         fail("Ran out of room",
              "The trip was too long to finish - tap Plan again, or ask for fewer days.",
              rawText);
@@ -2742,7 +2794,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-16a";
+  var APP_BUILD = "2026-09-17b";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so

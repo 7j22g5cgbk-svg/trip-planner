@@ -285,7 +285,9 @@ so neither needed to be degraded.
 - **Raising `max_tokens`.** Tried: 16,000 turned truncation into an HTTP 524,
   because time scales with tokens generated. Raising the cap is the wrong lever.
 - **Fewer searches.** `max_uses: 2` and even `1` still ran past 125s. Search count
-  was never the cost; thinking was.
+  was never the cost; thinking was. *(Re-measured 2026-09-17 with thinking off —
+  see section 9. Search count is not the cause of a 524, and that stands, but it
+  is not free either: it was simply invisible next to a 60s thinking bill.)*
 - **Streaming.** Still off, still reverted, and never the cause of any of this —
   every failure above was measured on the reverted non-streaming build.
 
@@ -328,11 +330,20 @@ Tag a build `good-<APP_BUILD>` as soon as the suite passes against it live.
 one would actually **render**, not merely return HTTP 200. It reproduces the
 client's own pipeline (concatenate text blocks, strip `<cite>`, scan for the
 first balanced `{ ... }`, check the shape the renderer needs) and fails any run
-slower than the 95s watchdog.
+slower than the client watchdog.
 
 It cannot drift from the app: `tools/extract_prompt.js` pulls `buildPrompt()`
 out of `index.html` and runs it under JavaScriptCore, and `max_tokens`,
-`max_uses`, `SAVED_MAX` and `PREF_MAX` are all read from the file under test.
+`max_uses`, `REQUEST_TIMEOUT_MS`, `SAVED_MAX` and `PREF_MAX` are all read from
+the file under test.
+
+`tools/retry_budget_test.js` is the companion that costs **no API credit** — it
+reads the timeout constants out of `index.html` and proves the truncation retry
+can never stack two long requests. Run it on every edit to the request path:
+
+```sh
+jsc tools/retry_budget_test.js -- index.html
+```
 
 ```sh
 # the password lives in the login keychain
@@ -362,3 +373,145 @@ them: `jsc tools/render_test.js -- index.html`.
 
 ---
 
+---
+
+## 9. The speed pass — build 2026-09-17b
+
+Section 6 fixed *correctness* (trips complete and parse). This pass is about the
+remaining symptom: heavy trips occasionally crossing the client watchdog and
+showing **"That took too long"** for research that would have finished.
+
+### What was measured
+
+"Lisbon, 1 day" with a full library (60 saved / 15 likes / 15 dislikes), thinking
+already disabled:
+
+| `max_uses` | wall time | input tokens | output tokens | result |
+|---|---|---|---|---|
+| 3 (old) | 29.1s | 57,129 | 2,924 | complete |
+| 2 (new) | 26.6s | 26,670 | 2,924 | complete |
+
+The headline is that **the median heavy trip takes ~27s, not ~95s.** Nothing was
+near the watchdog. So the watchdog was not firing on a slow median — it was
+firing on the tail of `web_search` round-trips, which is exactly the kind of
+failure that reads as "occasionally".
+
+That reframes both levers: dropping a search removes one tail draw from the
+critical path (and halves the input tokens for free — same 2,924 output tokens,
+so the trip that comes back is no smaller), and raising the watchdog covers the
+tail that is left.
+
+### The three changes
+
+| change | from | to |
+|---|---|---|
+| `web_search max_uses` | 3 | **2** |
+| `REQUEST_TIMEOUT_MS` | 95,000 | **110,000** |
+| retry budget | none — a fresh watchdog per attempt | **`PLAN_BUDGET_MS` = 115,000, shared** |
+
+### The retry *could* stack — it does now not
+
+This was a real bug, confirmed in the code rather than in the wild. `tooLong()`
+called `send(dest, key, true)` for a truncated reply, and the retry started its
+**own** full-length watchdog. A first attempt that was slow *and* truncated
+therefore bought a second full wait: 95 + 95 = **~190s** of spinner, which a user
+reads as a hang. Raising the timeout alone would have made that 110 + 110 = 220s.
+
+`planTrip()` now stamps a single `deadline` (`Date.now() + PLAN_BUDGET_MS`) that
+both attempts share. Each attempt's watchdog is `min(REQUEST_TIMEOUT_MS, deadline
+- now)`, and the retry is skipped entirely when less than `RETRY_MIN_MS` (30s)
+remains — a slow-then-truncated first attempt now shows "Ran out of room"
+immediately instead of buying a second wait. Worst-case total wall time is
+**115s, whatever the first attempt did**, which `tools/retry_budget_test.js`
+proves by sweeping every instant the first attempt could truncate at.
+
+### An HTTP 524 now reads as a timeout
+
+110s is under Cloudflare's cut (~125s, section 6). But if that cut is ever nearer
+100s on some path, the old code would have turned a clean "That took too long"
+into a baffling "The API returned an error (HTTP 524)". A 524/504 is the same
+event as the watchdog firing, so it now says the same thing. `REQUEST_TIMEOUT_MS`
+is the number to lower if a 524 ever shows up at ~100s.
+
+### Live results, 2026-09-17 (all with a full library)
+
+| case | time | out tokens | result |
+|---|---|---|---|
+| Lisbon, 1 day ×3 | 27.5s / 31.3s / 29.8s | 2,580–2,861 | pass |
+| Rome, 3 days | 36.4s | 3,934 | pass |
+| New York, 7 days | 38.4s | 3,516 | **FAIL — see section 10** |
+| New York, 7 days (after the 10 fix) | 44.4s | 4,426 | pass |
+
+**The watchdog question is settled.** The slowest trip measured all day was
+44.4s against a 110s watchdog — 2.5× headroom. No run came within 65s of the
+limit, and nothing produced a 524.
+
+---
+
+## 10. The `<cite>` leak — "Could not read the trip data", found 2026-09-17
+
+Found while verifying section 9, on **"New York, 7 days"** with a full library:
+`stop_reason: end_turn`, 3,516 of 12,000 tokens, finished in 38.4s. Nothing was
+truncated and nothing was slow — the reply was simply **unparseable**.
+
+### Cause
+
+The model writes web-search citations *inside* JSON string values:
+
+```json
+"note":"<cite index=\"3-1\">Modern-luxe boutique hotel Williamsburg was
+named best</cite>Great rooftop"
+```
+
+The old cleanup removed only the **tags**:
+
+```js
+raw = raw.replace(/<\/?cite\b[^>]*>/gi, "");   /* comment claimed the content too */
+```
+
+That leaves the quoted source text sitting in the string — with the raw newlines
+and quote marks it came with, both illegal inside a JSON string. `JSON.parse`
+dies on a perfectly complete reply and the page shows **"Could not read the trip
+data"**. The comment above that line always claimed it stripped
+`<cite ...>...</cite>`; the regex never did.
+
+### Fix
+
+Remove the element *and* its content, then mop up any unpaired tag. The first
+rule is deliberately non-greedy so it cannot swallow the rest of the reply:
+
+```js
+raw = raw.replace(/<cite\b[^>]*>[\s\S]*?<\/cite>/gi, "");
+raw = raw.replace(/<\/?cite\b[^>]*>/gi, "");
+```
+
+`tools/trip_test.py` mirrors both rules, or it would stop reproducing the client.
+
+### Why this hid for so long, and what is still owed
+
+**Citations are stochastic.** The re-run after the fix passed — but it came back
+with *zero* cite tags, so it did **not** exercise the fix; the old rule would
+have parsed it too. Two consequences:
+
+- The fix is proven **offline**: `tools/cite_parse_test.js` builds the real
+  failure shape and the pre-fix file fails 6 of its 9 checks. That is solid.
+- It is **not yet confirmed live** against a cite-bearing reply. Still owed:
+  re-run `--case "New York, 7 days" --loaded` until a run whose
+  `raw_pre_cite` actually contains `<cite`, and confirm it passes.
+
+The diagnosis is also circumstantial on one point: the harness was storing only
+the first 4,000 characters of the *post*-strip text, so the failing reply's
+original text was never captured. The evidence is that the surviving fragment
+showed `"note":"` followed by a newline and citation-style prose — exactly what
+tag-only stripping produces. `trip_test.py` now keeps the full text **and** a
+`raw_pre_cite` copy, so the next occurrence is diagnosable in one look.
+
+### Offline suite — no API credit, run on every edit to the request path
+
+```sh
+jsc tools/retry_budget_test.js -- index.html   # retry cannot stack
+jsc tools/cite_parse_test.js   -- index.html   # cite-laden replies still parse
+jsc tools/render_test.js       -- index.html   # map links still build
+```
+
+Do not tag `good-2026-09-17b` until a cite-bearing New York run passes live.

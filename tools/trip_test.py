@@ -38,8 +38,10 @@ USER_AGENT   = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/605.1.15 (KHTML, like Gecko) "
                 "Version/18.0 Safari/605.1.15")
 MODEL        = "claude-sonnet-5"
-WATCHDOG_S   = 95     # REQUEST_TIMEOUT_MS in index.html
-CLOUDFLARE_S = 100    # the limit a 524 comes from
+# Defaults only. WATCHDOG_S is re-read from the file under test in main(), so
+# the suite always judges a run against the watchdog that file actually ships.
+WATCHDOG_S   = 110    # REQUEST_TIMEOUT_MS in index.html
+CLOUDFLARE_S = 125    # the limit a 524 comes from
 
 CASES = [
     ("short",  "Lisbon, 1 day"),
@@ -97,6 +99,10 @@ def client_parse(data):
              if isinstance(b, dict) and b.get("type") == "text"
              and isinstance(b.get("text"), str)]
     raw = "\n".join(parts).strip()
+    # Mirror index.html exactly: the cite ELEMENT and its content, then any
+    # unpaired tag. Removing only the tags leaves the quoted source text inside
+    # the JSON string, newlines and all, and the parse dies on a complete reply.
+    raw = re.sub(r"<cite\b[^>]*>.*?</cite>", "", raw, flags=re.I | re.S)
     raw = re.sub(r"</?cite\b[^>]*>", "", raw, flags=re.I)
 
     truncated = data.get("stop_reason") == "max_tokens"
@@ -217,7 +223,13 @@ def run_case(dest, password, max_tokens, max_uses, timeout,
                            and b.get("type") == "server_tool_use"])
 
     trip, raw, failure = client_parse(data)
-    rec["raw"] = raw[:4000] if raw else raw
+    # Full text, not a 4000-char sample: a parse failure is unreadable without
+    # the part that broke, and that is rarely in the first 4000 characters.
+    rec["raw"] = raw
+    rec["raw_pre_cite"] = "\n".join(
+        b.get("text", "") for b in (data.get("content") or [])
+        if isinstance(b, dict) and b.get("type") == "text"
+        and isinstance(b.get("text"), str))
     if failure:
         rec["reason"] = 'app would show "%s"' % failure
         return rec
@@ -296,6 +308,10 @@ def main():
         m = re.search(r"max_uses:\s*(\d+)", src)
         a.max_uses = int(m.group(1)) if m else 3
     build = re.search(r'APP_BUILD\s*=\s*"([^"]+)"', src)
+    global WATCHDOG_S
+    m = re.search(r"REQUEST_TIMEOUT_MS\s*=\s*(\d+)", src)
+    if m:
+        WATCHDOG_S = int(m.group(1)) // 1000
     if a.thinking is None:
         m = re.search(r'thinking:\s*\{\s*type:\s*"([a-z]+)"', src)
         a.thinking = m.group(1) if m else None
@@ -319,6 +335,7 @@ def main():
     print("  build       %s" % (build.group(1) if build else "?"))
     print("  max_tokens  %d      web_search max_uses  %d"
           % (a.max_tokens, a.max_uses))
+    print("  watchdog    %ss" % WATCHDOG_S)
     print("  library     %d saved / %d likes / %d dislikes%s"
           % (a.saved, a.likes, a.dislikes,
              "   (fresh device)" if not (a.saved or a.likes or a.dislikes) else ""))
@@ -338,7 +355,7 @@ def main():
                  rec["input_tokens"], rec["seconds"],
                  "" if rec["pass"] else "\n      -> %s" % rec["reason"]))
         if a.dump_raw and rec.get("raw"):
-            print("      --- raw (first 4000 chars) ---")
+            print("      --- raw ---")
             print("      " + rec["raw"].replace("\n", "\n      "))
 
     ok = sum(1 for r in results if r["pass"])
