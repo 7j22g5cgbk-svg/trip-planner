@@ -1,6 +1,6 @@
 # HANDOVER — Travel tooling
 
-**Written:** 2026-09-01 · **Updated:** 2026-09-01 (PWA session) · **For:** a fresh session with no prior context
+**Written:** 2026-09-01 · **Updated:** 2026-09-17 (live cite re-run — see section 11) · **For:** a fresh session with no prior context
 **Lives in:** `~/Desktop/trip-planner/` · covers this repo **and** `~/Desktop/MUCHIEZ_COCKPIT`
 
 `MUCHIEZ_COCKPIT/STAND.md` assumes you were there. This file does not. It is the cold-start
@@ -514,4 +514,72 @@ jsc tools/cite_parse_test.js   -- index.html   # cite-laden replies still parse
 jsc tools/render_test.js       -- index.html   # map links still build
 ```
 
-Do not tag `good-2026-09-17b` until a cite-bearing New York run passes live.
+Do not tag `good-2026-09-17b` yet. See section 11 — the live cite run has not
+been obtainable, and a separate failure is open.
+
+---
+
+## 11. Live re-run of 2026-09-17: no cites in 9 tries, and a new `pause_turn` failure
+
+Ran the section-10 debt: `trip_test.py --case "New York, 7 days" --loaded`,
+9 live calls total: 7 against the committed `index.html` (build 2026-09-17b)
+plus 2 against the cite-forcing scratch copy described below.
+
+### The cite fix is still unexercised live, and may be impractical to exercise
+
+**Zero of 9 replies contained a `<cite` tag.** Every reply that completed used
+exactly 2 searches and cited nothing. That includes a deliberate attempt to
+provoke citations: a scratch copy of `index.html`, byte-identical except for one
+added prompt line ordering the model to quote the recommending sentence verbatim
+into each why/note field, run with `--index`. The instruction visibly worked —
+the `why` values came back as source-style quotes ("a giant cat sculpture by
+Botero greets guests at the entrance") — and still **no cite markup**.
+
+So the `<cite index="...">` shape from section 10 is rarer than "stochastic"
+suggested; nine calls and a forcing prompt did not reproduce it. Cost of finding
+that out: ~1.6M input tokens.
+
+**Do not spend more credit re-running blind for this.** The fix stands on
+`tools/cite_parse_test.js`, which builds the real captured failure shape and
+fails 6 of 9 checks against the pre-fix file. If a live confirmation is still
+wanted, capture it opportunistically: the harness already stores `raw_pre_cite`,
+so grep it on any future loaded New York run rather than paying for dedicated
+attempts.
+
+### The real live failure: `stop_reason: "pause_turn"`, 4 of 7 runs
+
+| stop | in | out | searches |
+|---|---|---|---|
+| `pause_turn` | 235,142 | 998 | 13 |
+| `pause_turn` | 248,369 | 1,445 | 19 |
+| `pause_turn` | 237,103 | 1,033 | 14 |
+| `pause_turn` | 241,396 | 1,075 | 14 |
+| `end_turn` (passing runs) | ~28,000 | 2,690–3,780 | 2 |
+
+The 2 cite-forcing runs behaved identically (1 of 2 paused), so the prompt
+edit is not implicated.
+
+The request sends `max_uses: 2` (`index.html`, the `tools:` line). These
+responses came back with **13–19 `server_tool_use` blocks**. The model's own
+text says why:
+
+> "Let me wait and try again." · "It seems the tool is rate-limited this turn."
+> · "The search tool appears temporarily unavailable. Let me try once more."
+
+Search starts erroring mid-turn, the model loops retrying, and the turn ends as
+`pause_turn` with no JSON ever written — output stalls near 1k tokens while
+input inflates ~8x to ~240k. `index.html` has **no `pause_turn` branch**, so it
+falls through to the generic failure and the phone shows **"Could not read the
+trip data"** — the same symptom as the section-10 cite bug, a completely
+different cause. Anything diagnosing that message from the symptom alone will
+misattribute it.
+
+`pause_turn` is the API asking the client to continue the turn by sending the
+assistant response back. Options, cheapest first: fail honestly (distinct
+message, no retry storm) so it stops masquerading as a parse error; or handle it
+properly by continuing the turn, which costs another round-trip on a path
+already fighting a 110s watchdog.
+
+**Unfixed as of this writing.** It is the reason `good-2026-09-17b` is untagged:
+tagging a build that fails loaded New York ~57% of the time would mislead a
+later session that no longer remembers this one.
