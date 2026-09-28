@@ -3,7 +3,10 @@
    and falls back to the last cached copy when offline. Replaces the old
    cache-first worker that made updates "stick" on the old version. */
 
-var CACHE = "trip-cache-v2026-09-08b";
+/* Bump CACHE together with APP_BUILD (index.html) on every real fix -
+   otherwise an installed PWA can keep serving a stale index.html
+   indefinitely off a network blip (see fetch handler below). */
+var CACHE = "trip-cache-v2026-09-28";
 var ASSETS = [
   "./",
   "./index.html",
