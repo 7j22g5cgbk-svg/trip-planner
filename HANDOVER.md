@@ -663,3 +663,62 @@ silently.
 **Confirm on your device:** PWA footer should read `build 2026-09-17c` (or
 later) after this deploys. If it still shows an older build, uninstall and
 reinstall the PWA once.
+
+### My Trips — build 2026-09-28b, isolated at /test/ after a false start
+
+Ticket: save a generated trip, reopen it on any device, edit it in place
+(rename, edit item text/link, personal note, drop/restore, reorder, add
+manually), archive/restore, no hard delete.
+
+**Backend — `worker.js`, live, not yet deployed.** New `/trips` routes on
+the existing `TRIP_KV` (same pattern as `/vote`): save, list (`?all=1`
+includes archived), open, update, archive/restore. Verified end-to-end
+offline with `wrangler dev` in local mode (no Cloudflare account touched)
+— save/list/open/update/archive/restore all pass, `/vote` and
+`/totals-data` unaffected. `worker-live-2026-09-28.js` holds the actual
+live dashboard code as of 2026-09-28 for reference; diffed clean against
+`worker.js` (only doc comments beyond the new routes — nothing live is
+missing).
+
+**Frontend — lives at `/test/`, NOT at the root.** First pass put the My
+Trips build straight into root `index.html`/`sw.js` and it got pushed by
+accident, going live at the site root with the *old* (pre-`/trips`)
+Worker still behind it. Fixed same day: root `index.html`/`sw.js`
+reverted byte-for-byte to commit `a15fc02` (`APP_BUILD` back to
+`2026-09-17c`), service worker cache bumped to `trip-cache-v2026-09-28c`
+(a name never used during the incident, so every installed PWA drops
+whatever it grabbed in the window regardless of timing) — pushed. The
+working My Trips build now lives only under `test/` (`test/index.html`,
+`test/sw.js`, `test/manifest.webmanifest`), reachable at
+`https://7j22g5cgbk-svg.github.io/trip-planner/test/` once pushed. Its
+service worker registers at `/trip-planner/test/` only — path-scoped, so
+it cannot touch the root app's cache or vice versa. Own manifest name
+("Travel (Test)"), own cache name (`trip-test-cache-v2026-09-28b`), same
+shared password (localStorage is origin-wide and My Trips never touches
+the library/favorites keys, so sharing it is safe). Same live `API_URL`
+— no code difference there, it's the Worker deploy that's still pending.
+
+Also fixed: two `.bak` files got swept into a commit by accident via
+GitHub Desktop staging untracked files alongside an intended commit.
+Untracked (`git rm --cached`, not deleted from disk) and `*.bak` /
+`*.bak-*` added to `.gitignore` so it can't recur silently.
+
+**Not verified — the honest gap:**
+- Never opened on an iPhone or a Mac. Everything above was proven with
+  curl against a local `wrangler dev` instance and by reading the code —
+  no real device, no real Worker.
+- The live Worker still has no `/trips` routes. Until `worker.js` is
+  pasted into the Cloudflare dashboard (Workers & Pages -> trip-backend
+  -> Edit code -> Save and Deploy), `/test/` will reach the old Worker
+  and "Save this trip" will 200 into the trip-planning fallback instead
+  of saving anything — burns a daily-request slot, saves nothing.
+
+**Exact order to finish this:**
+1. Cloudflare dashboard -> paste `worker.js` -> Save and Deploy.
+2. Push the current commit (`worker-live-2026-09-28.js`) so `/test/` is
+   live on GitHub Pages, if not already pushed.
+3. iPhone + Mac: open `.../trip-planner/test/`, same shared password, run
+   the ticket's done-when checklist there.
+4. Approved -> copy the test build back over root `index.html`/`sw.js`
+   (drop the `-test` naming, fresh cache bump), commit, push. That's the
+   promote-to-live step — not done yet.
