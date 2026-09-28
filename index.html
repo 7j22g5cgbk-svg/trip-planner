@@ -202,12 +202,11 @@
     border:1px solid rgba(176,85,60,.24);border-radius:999px;
     padding:4px 10px;margin:0 0 12px;white-space:nowrap;
   }
-  .card-dropped{opacity:.55}
 
   /* ---------- sticky bar on the brief ---------- */
   .topbar{
     position:sticky;top:0;z-index:20;
-    display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    display:flex;align-items:center;gap:10px;
     margin:0 -20px;
     padding:calc(10px + env(safe-area-inset-top)) 20px 10px;
     background:rgba(236,238,237,.94);
@@ -501,7 +500,6 @@
     </form>
     <button class="btn btn-block" type="button" id="open-lib">My Library</button>
     <button class="btn btn-block" type="button" id="open-fav">Favorites</button>
-    <button class="btn btn-block" type="button" id="open-trips">My Trips</button>
     <button class="linkish" type="button" id="change-key">Change or clear password</button>
     <p class="buildtag" id="buildtag"></p>
   </div>
@@ -601,44 +599,6 @@
     <button class="linkish" type="button" id="fav-back">Back to planner</button>
   </div>
 
-  <!-- ============ my trips (saved, on the server) ============ -->
-  <div id="mytrips" hidden>
-    <header class="masthead">
-      <p class="eyebrow">Travel Brief</p>
-      <h1 class="destination">My Trips</h1>
-      <p class="summary">Saved trips, newest first — open one to edit it.</p>
-    </header>
-    <div class="actions" style="margin-bottom:14px">
-      <button class="btn btn--sm" type="button" id="trips-toggle-archived">Show archived</button>
-    </div>
-    <p class="lib-msg" id="trips-msg" hidden></p>
-    <div id="trips-list"></div>
-    <button class="linkish" type="button" id="trips-back">Back to planner</button>
-  </div>
-
-  <!-- ============ edit one saved trip ============ -->
-  <div id="tripedit" hidden>
-    <header class="masthead">
-      <p class="eyebrow">Travel Brief</p>
-      <h1 class="destination">Edit trip</h1>
-    </header>
-    <label class="field">
-      <span class="label">Trip name</span>
-      <input type="text" id="te-name" placeholder="Trip name">
-    </label>
-    <label class="field">
-      <span class="label">Destination</span>
-      <input type="text" id="te-dest" placeholder="Destination">
-    </label>
-    <div id="te-list"></div>
-    <p class="lib-msg" id="te-msg" hidden></p>
-    <div class="actions" style="margin-top:20px">
-      <button class="btn-solid btn-inline" type="button" id="te-save">Save changes</button>
-      <button class="btn" type="button" id="te-archive">Archive trip</button>
-    </div>
-    <button class="linkish" type="button" id="te-back">Back to My Trips</button>
-  </div>
-
   <!-- ============ loading ============ -->
   <div id="loading" class="state" hidden>
     <div class="spinner" role="status" aria-live="polite"></div>
@@ -663,10 +623,8 @@
   <div id="result" hidden>
     <div class="topbar">
       <button class="topbtn" type="button" id="r-new">← New search</button>
-      <button class="topbtn" type="button" id="r-save">Save this trip</button>
       <button class="topbtn push" type="button" id="r-fav">Favorites</button>
       <button class="topbtn" type="button" id="r-lib">My Library</button>
-      <button class="topbtn" type="button" id="r-trips">My Trips</button>
     </div>
     <header class="masthead">
       <p class="eyebrow">Travel Brief</p>
@@ -693,7 +651,7 @@
   var STORE_KEY = "anthropic_key";
 
   var $ = function (id) { return document.getElementById(id); };
-  var views = ["setup", "main", "library", "favorites", "mytrips", "tripedit", "loading", "error", "result"];
+  var views = ["setup", "main", "library", "favorites", "loading", "error", "result"];
   function show(name) {
     views.forEach(function (v) { $(v).hidden = (v !== name); });
     window.scrollTo(0, 0);
@@ -1158,7 +1116,6 @@
 
   /* ---------- rendering ---------- */
   function render(trip) {
-    lastTrip = trip;
     destQ = txt(trip.destination) || lastDest;
     tripCity = cityOf(destQ);
     mergeLibrary(trip);
@@ -1867,17 +1824,6 @@
   var libScroll = false;  /* bring a freshly opened form into view once */
   var libReturn = "main"; /* which view the library was opened from */
   var lastMerge = null;   /* {any:bool} — did the last render fold anything in */
-  var lastTrip = null;    /* the trip object last rendered, for "Save this trip" */
-
-  /* ---------- saved trips (server-side, via the worker) ---------- */
-  var TRIP_CATS = ["hotel", "restaurant", "sight"];
-  var TRIP_CAT_TITLE = { hotel: "Hotels", restaurant: "Restaurants", sight: "Sights" };
-  var TRIP_CAT_ONE = { hotel: "hotel", restaurant: "restaurant", sight: "sight" };
-  var tripsArchivedView = false;  /* My Trips list: active vs archived */
-  var tripDraft = null;           /* the full trip being edited, or null */
-  var tripDirty = false;          /* unsaved edits on tripDraft */
-  var teDraft = null;             /* {cat, id|null, item} while an item form is open */
-  var teScroll = false;
 
   function newId() {
     return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -2735,283 +2681,6 @@
     show("favorites");
   }
 
-  /* ============ My Trips (saved on the server, via the worker) ============
-     One record per trip in Cloudflare KV. Flattens a rendered trip's hotels,
-     restaurants and sights into one items[] list, each carrying its own
-     personal note and keep/dropped flag, so a saved trip can be reopened on
-     any device behind the same shared password and edited in place. */
-
-  /* trip: the object render() just built (hotels/restaurants/sights arrays
-     with why/note/cuisine text). Flattened once, at save time, into the flat
-     shape the worker stores. */
-  function itemsFromTrip(trip) {
-    var out = [];
-    function push(cat, list, noteField) {
-      arr(list).forEach(function (it) {
-        var name = txt(it.name);
-        if (!name) return;
-        out.push({
-          id: newId(), category: cat, name: name,
-          description: txt(it[noteField]),
-          link: url(it.website) ? txt(it.website) : "",
-          city: tripCity, note: "", keep: true
-        });
-      });
-    }
-    push("hotel", trip.hotels, "why");
-    push("restaurant", trip.restaurants, "note");
-    push("sight", trip.sights, "note");
-    return out;
-  }
-
-  function tripsMsg(msg) {
-    var el = $("trips-msg");
-    if (!el) return;
-    el.textContent = msg || "";
-    el.hidden = !msg;
-  }
-
-  function tripCardHtml(t) {
-    var when = txt(t.updatedAt) ? new Date(t.updatedAt).toLocaleDateString() : "";
-    var meta = [txt(t.destination), when].filter(function (x) { return x; }).join(" \u00b7 ");
-    var count = t.itemCount || 0;
-    return '<article class="card">' +
-      '<h3 class="card-name">' + esc(t.name) + "</h3>" +
-      (meta ? '<p class="card-meta">' + esc(meta) + "</p>" : "") +
-      '<p class="card-note">' + count + (count === 1 ? " place saved" : " places saved") + "</p>" +
-      '<div class="actions">' +
-        '<button class="btn btn--sm" type="button" data-trips="open" data-id="' + esc(t.id) + '">Open</button>' +
-        '<button class="btn btn--sm" type="button" data-trips="' + (t.archived ? "restore" : "archive") +
-          '" data-id="' + esc(t.id) + '">' + (t.archived ? "Restore" : "Archive") + "</button>" +
-      "</div></article>";
-  }
-
-  function renderTrips(items) {
-    $("trips-list").innerHTML = items.length
-      ? '<div class="grid">' + items.map(tripCardHtml).join("") + "</div>"
-      : '<p class="empty">' + (tripsArchivedView ? "No archived trips." : "No saved trips yet.") + "</p>";
-    Array.prototype.forEach.call($("trips-list").querySelectorAll("[data-trips]"), function (btn) {
-      btn.onclick = function () {
-        var act = btn.getAttribute("data-trips"), id = btn.getAttribute("data-id");
-        if (act === "open") openTripEdit(id);
-        else if (act === "archive") setTripArchived(id, true, loadTrips);
-        else if (act === "restore") setTripArchived(id, false, loadTrips);
-        return false;
-      };
-    });
-  }
-
-  function loadTrips() {
-    tripsMsg("Loading\u2026");
-    var pw = getKey();
-    fetch(API_URL + "/trips" + (tripsArchivedView ? "?all=1" : ""), {
-      headers: { "x-trip-password": pw }
-    }).then(function (r) {
-      return r.json().then(function (d) { return { ok: r.ok, d: d }; });
-    }).then(function (x) {
-      if (!x.ok) { tripsMsg((x.d && x.d.error) || "Could not load."); $("trips-list").innerHTML = ""; return; }
-      tripsMsg("");
-      var items = (x.d && x.d.items) || [];
-      if (tripsArchivedView) items = items.filter(function (t) { return t.archived; });
-      renderTrips(items);
-    }).catch(function () {
-      tripsMsg("Network error."); $("trips-list").innerHTML = "";
-    });
-  }
-
-  function setTripArchived(id, on, done) {
-    var pw = getKey();
-    fetch(API_URL + "/trips/" + encodeURIComponent(id) + "/" + (on ? "archive" : "restore"), {
-      method: "POST", headers: { "x-trip-password": pw }
-    }).then(function (r) {
-      toast(r.ok ? "Saved \u2713" : "Could not update.");
-      if (done) done();
-    }).catch(function () { toast("Network error."); });
-  }
-
-  function openMyTrips() {
-    tripsArchivedView = false;
-    $("trips-toggle-archived").textContent = "Show archived";
-    loadTrips();
-    show("mytrips");
-  }
-
-  /* ---------- one saved trip, in edit ---------- */
-
-  function teFieldHtml(label, f, val, isTextarea) {
-    return '<label class="field"><span class="label">' + esc(label) + "</span>" +
-      (isTextarea ? '<textarea data-tf="' + f + '" rows="2">' + esc(val) + "</textarea>"
-                  : '<input type="text" data-tf="' + f + '" value="' + esc(val) + '">') +
-      "</label>";
-  }
-
-  function teItemFormHtml(draft) {
-    var it = draft.item;
-    return '<form class="lib-form" id="te-form">' +
-      teFieldHtml("Name", "name", it.name, false) +
-      teFieldHtml("Description", "description", it.description, true) +
-      teFieldHtml("Link", "link", it.link, false) +
-      teFieldHtml("Personal note", "note", it.note, true) +
-      '<div class="actions form-actions">' +
-        '<button class="btn-solid btn-inline" type="button" data-trip="save">Save</button>' +
-        '<button class="btn" type="button" data-trip="cancel">Cancel</button></div>' +
-      '<p class="lib-msg" id="te-form-msg" hidden></p></form>';
-  }
-
-  function teCardHtml(it) {
-    var linkBtn = url(it.link) ? link(url(it.link), "Website", true) : "";
-    return '<article class="card' + (it.keep ? "" : " card-dropped") + '">' +
-      '<h3 class="card-name">' + esc(it.name) +
-        (it.keep ? "" : ' <span class="tag">dropped</span>') + "</h3>" +
-      (it.description ? '<p class="card-note">' + esc(it.description) + "</p>" : "") +
-      (it.note ? '<p class="card-note"><strong>Note:</strong> ' + esc(it.note) + "</p>" : "") +
-      '<div class="actions">' + linkBtn +
-        '<button class="btn btn--sm" type="button" data-trip="up" data-id="' + esc(it.id) + '">\u2191</button>' +
-        '<button class="btn btn--sm" type="button" data-trip="down" data-id="' + esc(it.id) + '">\u2193</button>' +
-        '<button class="btn btn--sm" type="button" data-trip="keep" data-id="' + esc(it.id) + '">' +
-          (it.keep ? "Drop" : "Restore") + "</button>" +
-        '<button class="btn btn--sm" type="button" data-trip="edit" data-id="' + esc(it.id) + '">Edit</button>' +
-        '<button class="btn btn--sm" type="button" data-trip="delete" data-id="' + esc(it.id) + '">Remove</button>' +
-      "</div></article>";
-  }
-
-  function renderTripEdit() {
-    if (!tripDraft) return;
-    $("te-name").value = tripDraft.name;
-    $("te-dest").value = tripDraft.destination;
-    $("te-archive").textContent = tripDraft.archived ? "Restore trip" : "Archive trip";
-    var html = "";
-    TRIP_CATS.forEach(function (cat) {
-      var items = tripDraft.items.filter(function (it) { return it.category === cat; });
-      var body = "";
-      if (teDraft && teDraft.cat === cat) body += teItemFormHtml(teDraft);
-      body += items.length
-        ? '<div class="grid">' + items.map(teCardHtml).join("") + "</div>"
-        : '<p class="empty">Nothing here.</p>';
-      body += '<div class="actions" style="margin-top:14px">' +
-        '<button class="btn" type="button" data-trip="add" data-cat="' + cat + '">Add ' +
-        esc(TRIP_CAT_ONE[cat]) + "</button></div>";
-      html += section("te-" + cat, TRIP_CAT_TITLE[cat], items.length + " saved", body);
-    });
-    $("te-list").innerHTML = html;
-    bindTeControls();
-    if (teScroll) {
-      teScroll = false;
-      var f = $("te-form");
-      if (f && f.scrollIntoView) f.scrollIntoView({ block: "center" });
-    }
-  }
-
-  function bindTeControls() {
-    Array.prototype.forEach.call($("te-list").querySelectorAll("[data-trip]"), function (btn) {
-      btn.onclick = function () { teAction(btn.getAttribute("data-trip"), btn); return false; };
-    });
-  }
-
-  function moveItem(id, dir) {
-    var items = tripDraft.items;
-    var i = items.indexOf(items.filter(function (it) { return it.id === id; })[0]);
-    if (i === -1) return;
-    var cat = items[i].category, j = -1, k;
-    if (dir === "up") { for (k = i - 1; k >= 0; k--) { if (items[k].category === cat) { j = k; break; } } }
-    else { for (k = i + 1; k < items.length; k++) { if (items[k].category === cat) { j = k; break; } } }
-    if (j === -1) return;
-    var tmp = items[i]; items[i] = items[j]; items[j] = tmp;
-    tripDirty = true;
-    renderTripEdit();
-  }
-
-  function teAction(act, btn) {
-    var id = btn.getAttribute("data-id"), cat = btn.getAttribute("data-cat");
-    if (act === "add") {
-      teDraft = { cat: cat, id: null, item: { id: "", category: cat, name: "", description: "", link: "", note: "", keep: true } };
-      teScroll = true; renderTripEdit();
-    } else if (act === "edit") {
-      var it = tripDraft.items.filter(function (x) { return x.id === id; })[0];
-      if (!it) return;
-      teDraft = { cat: it.category, id: id, item: it };
-      teScroll = true; renderTripEdit();
-    } else if (act === "cancel") {
-      teDraft = null; renderTripEdit();
-    } else if (act === "save") {
-      saveTeDraft();
-    } else if (act === "delete") {
-      if (!window.confirm("Remove this item from the trip?")) return;
-      tripDraft.items = tripDraft.items.filter(function (x) { return x.id !== id; });
-      tripDirty = true; renderTripEdit();
-    } else if (act === "keep") {
-      var it2 = tripDraft.items.filter(function (x) { return x.id === id; })[0];
-      if (!it2) return;
-      it2.keep = !it2.keep;
-      tripDirty = true; renderTripEdit();
-    } else if (act === "up" || act === "down") {
-      moveItem(id, act);
-    }
-  }
-
-  function saveTeDraft() {
-    var form = $("te-form");
-    if (!form || !teDraft) return;
-    var it = teDraft.item;
-    Array.prototype.forEach.call(form.querySelectorAll("[data-tf]"), function (el) {
-      var f = el.getAttribute("data-tf");
-      it[f] = f === "link" ? cleanWebsite(el.value) : el.value.trim();
-    });
-    if (!it.name) {
-      var m = $("te-form-msg");
-      if (m) { m.textContent = "Give it a name first."; m.hidden = false; }
-      return;
-    }
-    it.category = teDraft.cat;
-    it.keep = it.keep !== false;
-    if (teDraft.id) {
-      var idx = -1;
-      tripDraft.items.forEach(function (x, i) { if (x.id === teDraft.id) idx = i; });
-      if (idx !== -1) tripDraft.items[idx] = it; else tripDraft.items.push(it);
-    } else {
-      it.id = newId();
-      tripDraft.items.push(it);
-    }
-    tripDirty = true;
-    teDraft = null;
-    renderTripEdit();
-  }
-
-  function openTripEdit(id) {
-    var pw = getKey();
-    $("te-msg").hidden = true;
-    fetch(API_URL + "/trips/" + encodeURIComponent(id), { headers: { "x-trip-password": pw } })
-      .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-      .then(function (x) {
-        if (!x.ok) { toast((x.d && x.d.error) || "Could not open trip."); return; }
-        tripDraft = x.d;
-        tripDraft.items = arr(tripDraft.items);
-        tripDirty = false;
-        teDraft = null;
-        renderTripEdit();
-        show("tripedit");
-      }).catch(function () { toast("Network error."); });
-  }
-
-  function saveTripChanges() {
-    if (!tripDraft) return;
-    tripDraft.name = $("te-name").value.trim() || tripDraft.name || "Untitled trip";
-    tripDraft.destination = $("te-dest").value.trim();
-    var pw = getKey();
-    fetch(API_URL + "/trips/" + encodeURIComponent(tripDraft.id), {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-trip-password": pw },
-      body: JSON.stringify({ name: tripDraft.name, destination: tripDraft.destination, items: tripDraft.items })
-    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-      .then(function (x) {
-        if (!x.ok) { toast((x.d && x.d.error) || "Could not save."); return; }
-        tripDraft = x.d.trip;
-        tripDirty = false;
-        renderTripEdit();
-        toast("Saved \u2713");
-      }).catch(function () { toast("Network error."); });
-  }
-
   /* ---------- wiring ---------- */
   $("setup-form").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -3082,55 +2751,6 @@
   });
   $("r-lib").addEventListener("click", function () { openLibrary("result"); });
   $("r-new").addEventListener("click", function () { show("main"); });
-
-  $("open-trips").addEventListener("click", openMyTrips);
-  $("r-trips").addEventListener("click", openMyTrips);
-  $("trips-back").addEventListener("click", function () { show("main"); });
-  $("trips-toggle-archived").addEventListener("click", function () {
-    tripsArchivedView = !tripsArchivedView;
-    $("trips-toggle-archived").textContent = tripsArchivedView ? "Show active" : "Show archived";
-    loadTrips();
-  });
-
-  $("r-save").addEventListener("click", function () {
-    if (!lastTrip) return;
-    var name = window.prompt("Name this trip:", txt(lastTrip.destination) || "My trip");
-    if (name === null) return;
-    name = name.trim();
-    if (!name) { toast("Give it a name first."); return; }
-    var pw = getKey();
-    fetch(API_URL + "/trips", {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-trip-password": pw },
-      body: JSON.stringify({
-        name: name, destination: txt(lastTrip.destination) || destQ,
-        items: itemsFromTrip(lastTrip)
-      })
-    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-      .then(function (x) {
-        toast(x.ok ? "Saved ✓" : ((x.d && x.d.error) || "Could not save."));
-      }).catch(function () { toast("Network error."); });
-  });
-
-  $("te-name").addEventListener("input", function () { tripDirty = true; });
-  $("te-dest").addEventListener("input", function () { tripDirty = true; });
-  $("te-save").addEventListener("click", saveTripChanges);
-  $("te-back").addEventListener("click", function () {
-    if (tripDirty && !window.confirm("Leave without saving changes?")) return;
-    tripDraft = null; teDraft = null; tripDirty = false;
-    show("mytrips");
-    loadTrips();
-  });
-  $("te-archive").addEventListener("click", function () {
-    if (!tripDraft) return;
-    var makeArchived = !tripDraft.archived;
-    if (!window.confirm(makeArchived ? "Archive this trip? You can restore it later." : "Restore this trip?")) return;
-    setTripArchived(tripDraft.id, makeArchived, function () {
-      tripDraft = null; teDraft = null; tripDirty = false;
-      show("mytrips");
-      loadTrips();
-    });
-  });
   $("lib-back").addEventListener("click", function () {
     libDraft = null;
     show(libReturn === "result" ? "result" : "main");
@@ -3225,7 +2845,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-28b";
+  var APP_BUILD = "2026-09-17c";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so

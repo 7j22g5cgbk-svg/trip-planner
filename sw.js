@@ -6,7 +6,7 @@
 /* Bump CACHE together with APP_BUILD (index.html) on every real fix -
    otherwise an installed PWA can keep serving a stale index.html
    indefinitely off a network blip (see fetch handler below). */
-var CACHE = "trip-cache-v2026-09-28b";
+var CACHE = "trip-cache-v2026-09-28c";
 var ASSETS = [
   "./",
   "./index.html",
