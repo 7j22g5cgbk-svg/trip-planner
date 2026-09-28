@@ -639,3 +639,27 @@ runaway guard before the retry call, exactly one retry call site in the file.
 **Trap found while writing it:** this `jsc` ignores the argument to `quit()` —
 every run exits 0. The offline suite's exit codes mean nothing; read the printed
 summary line. Do not wire these into anything that checks `$?`.
+
+### Fixed 2026-09-28 — stale PWA cache serving pre-09-17c index.html
+
+Ticket reported the exact pre-fix symptom (thinking ON, `max_uses` 3, 4th
+search rejected) on a live device that should have had the 09-17c fix. Live
+`index.html` and the Cloudflare Worker were both current — the mismatch was an
+**installed Mac desktop PWA**.
+
+`sw.js` is network-first, but on any failed `fetch()` (offline blip, flaky
+wifi) it silently falls back to `caches.match(req)` — whatever `index.html`
+was live the *last time the service worker itself reinstalled*. `CACHE` had
+not been bumped since `v2026-09-08b`, predating the 09-17c fix, so a PWA that
+hit one network hiccup could keep serving that old build indefinitely with no
+error shown.
+
+Fix: bumped `CACHE` to `v2026-09-28` (forces reinstall, old cache deleted per
+existing activate-step logic — that step already deleted every cache key
+except the current one, no change needed there) and added a comment: bump
+`CACHE` together with `APP_BUILD` on every real fix, so this can't recur
+silently.
+
+**Confirm on your device:** PWA footer should read `build 2026-09-17c` (or
+later) after this deploys. If it still shows an older build, uninstall and
+reinstall the PWA once.
