@@ -603,6 +603,9 @@
 
   <!-- ============ my trips (saved, on the server) ============ -->
   <div id="mytrips" hidden>
+    <div class="topbar">
+      <button class="topbtn" type="button" id="trips-new">← New trip</button>
+    </div>
     <header class="masthead">
       <p class="eyebrow">Travel Brief</p>
       <h1 class="destination">My Trips</h1>
@@ -618,6 +621,9 @@
 
   <!-- ============ edit one saved trip ============ -->
   <div id="tripedit" hidden>
+    <div class="topbar">
+      <button class="topbtn" type="button" id="te-back-top">← Back to My Trips</button>
+    </div>
     <header class="masthead">
       <p class="eyebrow">Travel Brief</p>
       <h1 class="destination">Edit trip</h1>
@@ -3086,6 +3092,7 @@
   $("open-trips").addEventListener("click", openMyTrips);
   $("r-trips").addEventListener("click", openMyTrips);
   $("trips-back").addEventListener("click", function () { show("main"); });
+  $("trips-new").addEventListener("click", function () { show("main"); });
   $("trips-toggle-archived").addEventListener("click", function () {
     tripsArchivedView = !tripsArchivedView;
     $("trips-toggle-archived").textContent = tripsArchivedView ? "Show active" : "Show archived";
@@ -3115,12 +3122,14 @@
   $("te-name").addEventListener("input", function () { tripDirty = true; });
   $("te-dest").addEventListener("input", function () { tripDirty = true; });
   $("te-save").addEventListener("click", saveTripChanges);
-  $("te-back").addEventListener("click", function () {
+  function backToMyTrips() {
     if (tripDirty && !window.confirm("Leave without saving changes?")) return;
     tripDraft = null; teDraft = null; tripDirty = false;
     show("mytrips");
     loadTrips();
-  });
+  }
+  $("te-back").addEventListener("click", backToMyTrips);
+  $("te-back-top").addEventListener("click", backToMyTrips);
   $("te-archive").addEventListener("click", function () {
     if (!tripDraft) return;
     var makeArchived = !tripDraft.archived;
@@ -3225,7 +3234,7 @@
 
   /* Stamped so you can tell in one glance which version the phone is running.
      If the phone shows an older date than the Mac, the phone is stale. */
-  var APP_BUILD = "2026-09-28b-test";
+  var APP_BUILD = "2026-09-28c-test";
   try { $("buildtag").textContent = "build " + APP_BUILD; } catch (e) {}
 
   /* An iPhone home-screen app is resumed far more often than it is loaded, so

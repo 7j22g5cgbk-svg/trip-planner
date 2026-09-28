@@ -10,7 +10,7 @@
    browser only ever registers it for /test/ — it can never intercept a
    request to the real app at the site root, and the real app's sw.js can
    never intercept a request under /test/ either. Two independent workers. */
-var CACHE = "trip-test-cache-v2026-09-28b";
+var CACHE = "trip-test-cache-v2026-09-28c";
 var ASSETS = [
   "./",
   "./index.html",
