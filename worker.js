@@ -52,6 +52,37 @@ export default {
       return json({ items: items }, 200);
     }
 
+    // List saved trips (needs the password). ?all=1 also returns archived ones.
+    if (request.method === "GET" && path === "/trips") {
+      if ((request.headers.get("x-trip-password") || "") !== env.FRIENDS_PASSWORD) {
+        return json({ error: "Wrong or missing password." }, 401);
+      }
+      const includeArchived = url.searchParams.get("all") === "1";
+      const list = await env.TRIP_KV.list({ prefix: "trip:" });
+      const items = [];
+      for (const k of list.keys) {
+        try {
+          const rec = JSON.parse((await env.TRIP_KV.get(k.name)) || "null");
+          if (!rec) continue;
+          if (!includeArchived && rec.archived) continue;
+          items.push(tripSummary(rec));
+        } catch (e) {}
+      }
+      items.sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+      return json({ items }, 200);
+    }
+
+    // Open one saved trip, full detail (needs the password).
+    if (request.method === "GET" && path.indexOf("/trips/") === 0) {
+      if ((request.headers.get("x-trip-password") || "") !== env.FRIENDS_PASSWORD) {
+        return json({ error: "Wrong or missing password." }, 401);
+      }
+      const id = path.slice("/trips/".length);
+      const raw = await env.TRIP_KV.get("trip:" + id);
+      if (!raw) return json({ error: "Trip not found." }, 404);
+      return json(JSON.parse(raw), 200);
+    }
+
     // Health check.
     if (request.method === "GET") {
       return new Response("trip-backend is alive", {
@@ -93,6 +124,62 @@ export default {
       return json({ ok: true }, 200);
     }
 
+    // Archive / restore a saved trip. No real delete — archive just hides it.
+    if (path.indexOf("/trips/") === 0 && (path.slice(-8) === "/archive" || path.slice(-8) === "/restore")) {
+      const archiving = path.slice(-8) === "/archive";
+      const id = path.slice("/trips/".length, -8);
+      const raw = await env.TRIP_KV.get("trip:" + id);
+      if (!raw) return json({ error: "Trip not found." }, 404);
+      const trip = JSON.parse(raw);
+      trip.archived = archiving;
+      trip.updatedAt = new Date().toISOString();
+      await env.TRIP_KV.put("trip:" + id, JSON.stringify(trip));
+      return json({ trip }, 200);
+    }
+
+    // Save a new trip.
+    if (path === "/trips") {
+      let b = {};
+      try { b = await request.json(); } catch (e) {}
+      const now = new Date().toISOString();
+      const trip = {
+        id: newTripId(),
+        name: String(b.name || "").slice(0, 140) || "Untitled trip",
+        destination: String(b.destination || "").slice(0, 200),
+        dates: String(b.dates || "").slice(0, 140),
+        savedBy: String(b.savedBy || "").slice(0, 140),
+        createdAt: now,
+        updatedAt: now,
+        archived: false,
+        items: sanitizeItems(b.items),
+      };
+      await env.TRIP_KV.put("trip:" + trip.id, JSON.stringify(trip));
+      return json({ trip }, 200);
+    }
+
+    // Update an existing trip (rename, edit items, reorder, drop/restore, add).
+    if (path.indexOf("/trips/") === 0) {
+      const id = path.slice("/trips/".length);
+      const raw = await env.TRIP_KV.get("trip:" + id);
+      if (!raw) return json({ error: "Trip not found." }, 404);
+      const existing = JSON.parse(raw);
+      let b = {};
+      try { b = await request.json(); } catch (e) {}
+      const trip = {
+        id: existing.id,
+        name: String(b.name != null ? b.name : existing.name || "").slice(0, 140) || "Untitled trip",
+        destination: String(b.destination != null ? b.destination : existing.destination || "").slice(0, 200),
+        dates: String(b.dates != null ? b.dates : existing.dates || "").slice(0, 140),
+        savedBy: String(b.savedBy != null ? b.savedBy : existing.savedBy || "").slice(0, 140),
+        createdAt: existing.createdAt,
+        updatedAt: new Date().toISOString(),
+        archived: !!existing.archived,
+        items: sanitizeItems(b.items != null ? b.items : existing.items),
+      };
+      await env.TRIP_KV.put("trip:" + id, JSON.stringify(trip));
+      return json({ trip }, 200);
+    }
+
     // Default POST = a trip-planning request → forward to Anthropic (with the daily cap).
     const today = new Date().toISOString().slice(0, 10);
     const ckey = `count:${today}`;
@@ -126,6 +213,44 @@ function json(obj, status) {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
+}
+
+// ---------- saved trips ----------
+
+const TRIP_CATS = ["hotel", "restaurant", "sight"];
+
+function newTripId() {
+  try { return crypto.randomUUID(); }
+  catch (e) { return Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+}
+
+// Full item validation happens here so a bad or oversized payload can never
+// bloat KV or break the app that reads it back.
+function sanitizeItems(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return list.slice(0, 200).map((it) => {
+    it = it && typeof it === "object" ? it : {};
+    return {
+      id: String(it.id || "").slice(0, 60) || newTripId(),
+      category: TRIP_CATS.indexOf(it.category) !== -1 ? it.category : "sight",
+      name: String(it.name || "").slice(0, 200),
+      description: String(it.description || "").slice(0, 600),
+      link: String(it.link || "").slice(0, 500),
+      city: String(it.city || "").slice(0, 140),
+      note: String(it.note || "").slice(0, 600),
+      keep: it.keep !== false,
+    };
+  }).filter((it) => it.name);
+}
+
+// The list view never needs every item's full text — just enough to show a row.
+function tripSummary(t) {
+  return {
+    id: t.id, name: t.name, destination: t.destination, dates: t.dates,
+    savedBy: t.savedBy, createdAt: t.createdAt, updatedAt: t.updatedAt,
+    archived: !!t.archived,
+    itemCount: Array.isArray(t.items) ? t.items.length : 0,
+  };
 }
 
 const TOTALS_PAGE = `<!doctype html><html><head><meta charset="utf-8">
